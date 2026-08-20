@@ -1,0 +1,7 @@
+path: C:/VanDrishtiProject/data/processed/yolo
+train: images/train
+val: images/val
+test: images/test
+
+nc: 1
+names: ['Tree']

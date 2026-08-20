@@ -1,0 +1,105 @@
+{
+  "study_area": {
+    "name": "OSBS_022",
+    "site": "Ordway-Swisher Biological Station (OSBS), Florida",
+    "center": [
+      29.689463,
+      -81.96059
+    ],
+    "bounds": [
+      -81.960675,
+      29.689382,
+      -81.960506,
+      29.689545
+    ]
+  },
+  "layers": {
+    "project_boundary_OSBS_022.geojson": {
+      "features": 1,
+      "bounds": [
+        -81.960735,
+        29.689427,
+        -81.960547,
+        29.689627
+      ],
+      "center": [
+        29.689527,
+        -81.960641
+      ]
+    },
+    "OSBS_022_2019_trees_with_boundary_status.geojson": {
+      "features": 5,
+      "bounds": [
+        -81.960675,
+        29.689382,
+        -81.960506,
+        29.689545
+      ],
+      "center": [
+        29.689463,
+        -81.96059
+      ]
+    },
+    "OSBS_022_2019_verification_priority.geojson": {
+      "features": 5,
+      "bounds": [
+        -81.960675,
+        29.689382,
+        -81.960506,
+        29.689545
+      ],
+      "center": [
+        29.689463,
+        -81.96059
+      ]
+    },
+    "OSBS_022_2019_field_route.geojson": {
+      "features": 1,
+      "bounds": [
+        -81.960897,
+        29.6893,
+        -81.96056,
+        29.689523
+      ],
+      "center": [
+        29.689412,
+        -81.960729
+      ]
+    },
+    "OSBS_022_2019_field_route_lcp.geojson": {
+      "features": 1,
+      "bounds": [
+        -81.960896,
+        29.689301,
+        -81.96056,
+        29.689523
+      ],
+      "center": [
+        29.689412,
+        -81.960728
+      ]
+    },
+    "OSBS_022_degradation_zones.geojson": {
+      "features": 17,
+      "bounds": [
+        -81.960705,
+        29.689317,
+        -81.960487,
+        29.689664
+      ],
+      "center": [
+        29.68949,
+        -81.960596
+      ]
+    },
+    "fire_hotspots_osbs_live.geojson": {
+      "features": 11,
+      "bounds": [
+        -82.486,
+        29.21601,
+        -81.5254,
+        30.03199
+      ]
+    }
+  }
+}

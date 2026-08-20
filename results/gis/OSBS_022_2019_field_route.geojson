@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "OSBS_022_2019_field_route",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::32617" } },
+"features": [
+{ "type": "Feature", "properties": { "route_name": "OSBS_022 Field Verification Route", "total_distance_meters": 54.8, "stops_count": 3, "visiting_sequence": "Ranger Base / Entry Point -> Tree #1 -> Tree #5 -> Tree #4", "path_type": "Straight-line Euclidean (Nearest-Neighbor Heuristic)", "limitation_note": "Calculated via direct straight-line distance; real fieldwork path will conform to local terrain/trail topology." }, "geometry": { "type": "LineString", "coordinates": [ [ 407034.100000000034925, 3284744.200000000186265 ], [ 407055.800999999977648, 3284765.785000000149012 ], [ 407063.333999999973457, 3284768.742999999783933 ], [ 407066.859, 3284753.037 ] ] } }
+]
+}

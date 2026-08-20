@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "project_boundary_OSBS_022",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::32617" } },
+"features": [
+{ "type": "Feature", "properties": { "name": "Proposed Center-Right Project Corridor", "area_sq_m": 396.0, "tile_coverage_pct": 24.75 }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 407068.100000000034925, 3284758.200000000186265 ], [ 407068.100000000034925, 3284780.200000000186265 ], [ 407050.100000000034925, 3284780.200000000186265 ], [ 407050.100000000034925, 3284758.200000000186265 ], [ 407068.100000000034925, 3284758.200000000186265 ] ] ] } }
+]
+}

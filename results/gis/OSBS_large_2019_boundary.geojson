@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "OSBS_large_2019_boundary",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::32617" } },
+"features": [
+{ "type": "Feature", "properties": { "name": "OSBS Large 2019 Infrastructure Corridor", "area_sq_m": 15000.0, "tile_coverage_pct": 24.0 }, "geometry": { "type": "Polygon", "coordinates": [ [ [ 407700.0, 3283800.0 ], [ 407700.0, 3283860.0 ], [ 407950.0, 3283960.0 ], [ 407950.0, 3283900.0 ], [ 407700.0, 3283800.0 ] ] ] } }
+]
+}

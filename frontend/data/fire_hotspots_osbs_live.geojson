@@ -1,0 +1,18 @@
+{
+"type": "FeatureCollection",
+"name": "fire_hotspots_osbs_live",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"features": [
+{ "type": "Feature", "properties": { "hotspot_id": 1, "latitude": 29.71264, "longitude": -81.92288, "brightness_k": 367.0, "confidence": "h", "frp_mw": 11.17, "acq_date": "2026-08-16", "acq_time_utc": "1804", "satellite": "N", "daynight": "D" }, "geometry": { "type": "Point", "coordinates": [ -81.92288, 29.71264 ] } },
+{ "type": "Feature", "properties": { "hotspot_id": 2, "latitude": 29.71345, "longitude": -81.91948, "brightness_k": 338.2, "confidence": "n", "frp_mw": 9.52, "acq_date": "2026-08-16", "acq_time_utc": "1804", "satellite": "N", "daynight": "D" }, "geometry": { "type": "Point", "coordinates": [ -81.91948, 29.71345 ] } },
+{ "type": "Feature", "properties": { "hotspot_id": 3, "latitude": 29.7149, "longitude": -81.92307, "brightness_k": 337.81, "confidence": "n", "frp_mw": 9.39, "acq_date": "2026-08-16", "acq_time_utc": "1945", "satellite": "N", "daynight": "D" }, "geometry": { "type": "Point", "coordinates": [ -81.92307, 29.7149 ] } },
+{ "type": "Feature", "properties": { "hotspot_id": 4, "latitude": 29.27543, "longitude": -81.99432, "brightness_k": 335.41, "confidence": "n", "frp_mw": 2.37, "acq_date": "2026-08-18", "acq_time_utc": "1908", "satellite": "N", "daynight": "D" }, "geometry": { "type": "Point", "coordinates": [ -81.99432, 29.27543 ] } },
+{ "type": "Feature", "properties": { "hotspot_id": 5, "latitude": 29.58222, "longitude": -81.5254, "brightness_k": 349.05, "confidence": "n", "frp_mw": 25.25, "acq_date": "2026-08-18", "acq_time_utc": "1908", "satellite": "N", "daynight": "D" }, "geometry": { "type": "Point", "coordinates": [ -81.5254, 29.58222 ] } },
+{ "type": "Feature", "properties": { "hotspot_id": 6, "latitude": 29.5864, "longitude": -81.52597, "brightness_k": 349.26, "confidence": "n", "frp_mw": 25.25, "acq_date": "2026-08-18", "acq_time_utc": "1908", "satellite": "N", "daynight": "D" }, "geometry": { "type": "Point", "coordinates": [ -81.52597, 29.5864 ] } },
+{ "type": "Feature", "properties": { "hotspot_id": 7, "latitude": 29.21601, "longitude": -82.18132, "brightness_k": 330.5, "confidence": "l", "frp_mw": 2.06, "acq_date": "2026-08-19", "acq_time_utc": "1847", "satellite": "N", "daynight": "D" }, "geometry": { "type": "Point", "coordinates": [ -82.18132, 29.21601 ] } },
+{ "type": "Feature", "properties": { "hotspot_id": 8, "latitude": 29.32874, "longitude": -82.07999, "brightness_k": 335.71, "confidence": "n", "frp_mw": 2.92, "acq_date": "2026-08-19", "acq_time_utc": "1847", "satellite": "N", "daynight": "D" }, "geometry": { "type": "Point", "coordinates": [ -82.07999, 29.32874 ] } },
+{ "type": "Feature", "properties": { "hotspot_id": 9, "latitude": 29.95791, "longitude": -82.37028, "brightness_k": 332.43, "confidence": "n", "frp_mw": 2.07, "acq_date": "2026-08-19", "acq_time_utc": "1847", "satellite": "N", "daynight": "D" }, "geometry": { "type": "Point", "coordinates": [ -82.37028, 29.95791 ] } },
+{ "type": "Feature", "properties": { "hotspot_id": 10, "latitude": 29.27532, "longitude": -82.18404, "brightness_k": 309.3, "confidence": "n", "frp_mw": 1.59, "acq_date": "2026-08-20", "acq_time_utc": "0712", "satellite": "N", "daynight": "N" }, "geometry": { "type": "Point", "coordinates": [ -82.18404, 29.27532 ] } },
+{ "type": "Feature", "properties": { "hotspot_id": 11, "latitude": 30.03199, "longitude": -82.486, "brightness_k": 303.37, "confidence": "n", "frp_mw": 0.52, "acq_date": "2026-08-20", "acq_time_utc": "0712", "satellite": "N", "daynight": "N" }, "geometry": { "type": "Point", "coordinates": [ -82.486, 30.03199 ] } }
+]
+}

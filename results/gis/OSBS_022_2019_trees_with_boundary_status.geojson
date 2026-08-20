@@ -1,0 +1,12 @@
+{
+"type": "FeatureCollection",
+"name": "OSBS_022_2019_trees_with_boundary_status",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::32617" } },
+"features": [
+{ "type": "Feature", "properties": { "tree_id": 1, "label": "Tree", "confidence": 0.794, "pixel_xmin": 198.66, "pixel_ymin": 163.17, "pixel_xmax": 234.36, "pixel_ymax": 204.12, "pixel_center_x": 216.51, "pixel_center_y": 183.65, "geo_easting": 407055.801, "geo_northing": 3284765.785, "inside_boundary": true }, "geometry": { "type": "Point", "coordinates": [ 407055.800818000047002, 3284765.785255500115454 ] } },
+{ "type": "Feature", "properties": { "tree_id": 2, "label": "Tree", "confidence": 0.6995, "pixel_xmin": 363.01, "pixel_ymin": 110.72, "pixel_xmax": 398.65, "pixel_ymax": 151.34, "pixel_center_x": 380.83, "pixel_center_y": 131.03, "geo_easting": 407072.233, "geo_northing": 3284771.047, "inside_boundary": false }, "geometry": { "type": "Point", "coordinates": [ 407072.233340000035241, 3284771.047210500109941 ] } },
+{ "type": "Feature", "properties": { "tree_id": 3, "label": "Tree", "confidence": 0.5583, "pixel_xmin": 348.2, "pixel_ymin": 283.15, "pixel_xmax": 393.9, "pixel_ymax": 332.37, "pixel_center_x": 371.05, "pixel_center_y": 307.76, "geo_easting": 407071.255, "geo_northing": 3284753.374, "inside_boundary": false }, "geometry": { "type": "Point", "coordinates": [ 407071.254812500032131, 3284753.373810000251979 ] } },
+{ "type": "Feature", "properties": { "tree_id": 4, "label": "Tree", "confidence": 0.4539, "pixel_xmin": 306.34, "pixel_ymin": 286.46, "pixel_xmax": 347.84, "pixel_ymax": 335.8, "pixel_center_x": 327.09, "pixel_center_y": 311.13, "geo_easting": 407066.859, "geo_northing": 3284753.037, "inside_boundary": false }, "geometry": { "type": "Point", "coordinates": [ 407066.859386500029359, 3284753.037015000358224 ] } },
+{ "type": "Feature", "properties": { "tree_id": 5, "label": "Tree", "confidence": 0.4199, "pixel_xmin": 279.04, "pixel_ymin": 140.67, "pixel_xmax": 304.63, "pixel_ymax": 167.46, "pixel_center_x": 291.84, "pixel_center_y": 154.07, "geo_easting": 407063.334, "geo_northing": 3284768.743, "inside_boundary": true }, "geometry": { "type": "Point", "coordinates": [ 407063.333569, 3284768.743405499961227 ] } }
+]
+}
