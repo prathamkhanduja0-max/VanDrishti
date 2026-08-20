@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   Info,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Radio,
   FileText,
   ShieldAlert,
@@ -120,6 +122,8 @@ export default function App() {
     stops: true,
     fires: true,
   });
+
+  const [layersOpen, setLayersOpen] = useState(true);
 
   // OSBS 250m Study Area Center in WGS84
   const mapCenter = useMemo(() => [29.681510, -81.952647], []);
@@ -739,47 +743,68 @@ export default function App() {
                 )}
               </MapContainer>
 
-              {/* FLOATING LAYER TOGGLES & LEGEND */}
-              <div className="layer-panel">
-                <div className="layer-panel-header">
-                  <Layers size={14} style={{ color: '#34d399' }} />
-                  <span>Map Layers ({Object.values(layers).filter(Boolean).length}/6)</span>
-                </div>
+              {/* FLOATING LAYER TOGGLES & LEGEND (COLLAPSIBLE) */}
+              {layersOpen ? (
+                <div className="layer-panel">
+                  <div className="layer-panel-header">
+                    <div className="layer-panel-title">
+                      <Layers size={14} style={{ color: '#34d399' }} />
+                      <span>Map Layers ({Object.values(layers).filter(Boolean).length}/6)</span>
+                    </div>
+                    <button
+                      onClick={() => setLayersOpen(false)}
+                      className="layer-collapse-btn"
+                      title="Collapse Layer Panel"
+                    >
+                      <ChevronUp size={14} />
+                    </button>
+                  </div>
 
-                <div>
-                  {[
-                    { id: 'boundary', label: 'Project Corridor (24% Area)', color: '#ef4444' },
-                    { id: 'priority', label: `Priority Trees (${stats.totalTrees})`, color: '#ef4444' },
-                    { id: 'route', label: 'TSP Least-Cost Path (432m)', color: '#00e5ff' },
-                    { id: 'stops', label: `Numbered Audit Stops (${stats.highPriority})`, color: '#f87171' },
-                    { id: 'trees', label: 'Base Detection (All 684)', color: '#38bdf8' },
-                    { id: 'fires', label: `NASA FIRMS Hotspots (${stats.fireCount})`, color: '#f97316' },
-                  ].map((item) => (
-                    <label key={item.id} className="layer-item">
-                      <div className="layer-left">
-                        <input
-                          type="checkbox"
-                          checked={layers[item.id]}
-                          onChange={() => toggleLayer(item.id)}
-                          style={{ cursor: 'pointer' }}
-                        />
-                        <span>{item.label}</span>
-                      </div>
-                      <span className="layer-dot" style={{ backgroundColor: item.color }}></span>
-                    </label>
-                  ))}
-                </div>
+                  <div>
+                    {[
+                      { id: 'boundary', label: 'Project Corridor (24% Area)', color: '#ef4444' },
+                      { id: 'priority', label: `Priority Trees (${stats.totalTrees})`, color: '#ef4444' },
+                      { id: 'route', label: 'TSP Least-Cost Path (432m)', color: '#00e5ff' },
+                      { id: 'stops', label: `Numbered Audit Stops (${stats.highPriority})`, color: '#f87171' },
+                      { id: 'trees', label: 'Base Detection (All 684)', color: '#38bdf8' },
+                      { id: 'fires', label: `NASA FIRMS Hotspots (${stats.fireCount})`, color: '#f97316' },
+                    ].map((item) => (
+                      <label key={item.id} className="layer-item">
+                        <div className="layer-left">
+                          <input
+                            type="checkbox"
+                            checked={layers[item.id]}
+                            onChange={() => toggleLayer(item.id)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <span>{item.label}</span>
+                        </div>
+                        <span className="layer-dot" style={{ backgroundColor: item.color }}></span>
+                      </label>
+                    ))}
+                  </div>
 
-                {/* Priority Legend */}
-                <div className="legend-box">
-                  <div style={{ fontWeight: 600, color: '#94a3b8' }}>Verification Priority:</div>
-                  <div className="legend-swatches">
-                    <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> HIGH ({stats.highPriority})</span>
-                    <span className="swatch-item"><span className="layer-dot" style={{ background: '#f59e0b' }}></span> MED ({stats.mediumPriority})</span>
-                    <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> LOW ({stats.lowPriority})</span>
+                  {/* Priority Legend */}
+                  <div className="legend-box">
+                    <div style={{ fontWeight: 600, color: '#94a3b8' }}>Verification Priority:</div>
+                    <div className="legend-swatches">
+                      <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> HIGH ({stats.highPriority})</span>
+                      <span className="swatch-item"><span className="layer-dot" style={{ background: '#f59e0b' }}></span> MED ({stats.mediumPriority})</span>
+                      <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> LOW ({stats.lowPriority})</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <button
+                  onClick={() => setLayersOpen(true)}
+                  className="layer-panel-collapsed-btn"
+                  title="Expand Map Layers Control"
+                >
+                  <Layers size={14} style={{ color: '#34d399' }} />
+                  <span>Layers ({Object.values(layers).filter(Boolean).length}/6)</span>
+                  <ChevronDown size={13} style={{ color: '#94a3b8' }} />
+                </button>
+              )}
             </div>
           )}
 
