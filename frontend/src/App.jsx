@@ -946,28 +946,36 @@ export default function App() {
 
                     {/* Metric Outputs */}
                     {p2pRouteResult && (
-                      <div className="p2p-metrics-grid">
-                        <div className="p2p-metric-item">
-                          <span className="p2p-metric-label">Path Length</span>
-                          <span className="p2p-metric-val">
-                            {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}
-                          </span>
-                        </div>
-                        <div className="p2p-metric-item">
-                          <span className="p2p-metric-label">Estimated Time</span>
-                          <span className="p2p-metric-val">
-                            {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
-                          </span>
-                        </div>
-                        {!p2pRouteResult.is_projected && (
-                          <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
-                            <span className="p2p-metric-label">Pixel Distance</span>
-                            <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
-                              {p2pRouteResult.pixel_distance} px (Unprojected)
+                      <>
+                        <div className="p2p-metrics-grid">
+                          <div className="p2p-metric-item">
+                            <span className="p2p-metric-label">Path Length</span>
+                            <span className="p2p-metric-val">
+                              {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}
                             </span>
                           </div>
+                          <div className="p2p-metric-item">
+                            <span className="p2p-metric-label">Estimated Time</span>
+                            <span className="p2p-metric-val">
+                              {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                            </span>
+                          </div>
+                          {!p2pRouteResult.is_projected && (
+                            <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
+                              <span className="p2p-metric-label">Pixel Distance</span>
+                              <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
+                                {p2pRouteResult.pixel_distance} px (Unprojected)
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {p2pRouteResult.mode_label?.includes('ExG') && (
+                          <div style={{ fontSize: '9.5px', color: '#fbbf24', background: 'rgba(69, 26, 3, 0.6)', border: '1px solid #d97706', borderRadius: '4px', padding: '4px 6px', lineHeight: '1.3' }}>
+                            ⚠️ <b>Uncalibrated Proxy:</b> w_veg multiplier lacks field timing data. ExG-only travel times are relative impedance indices, not field-validated predictions.
+                          </div>
                         )}
-                      </div>
+                      </>
                     )}
 
                     <div className="p2p-actions">
@@ -1170,28 +1178,36 @@ export default function App() {
 
                   {/* Metric Outputs */}
                   {p2pRouteResult && (
-                    <div className="p2p-metrics-grid">
-                      <div className="p2p-metric-item">
-                        <span className="p2p-metric-label">Path Length</span>
-                        <span className="p2p-metric-val">
-                          {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}
-                        </span>
-                      </div>
-                      <div className="p2p-metric-item">
-                        <span className="p2p-metric-label">Estimated Time</span>
-                        <span className="p2p-metric-val">
-                          {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
-                        </span>
-                      </div>
-                      {!p2pRouteResult.is_projected && (
-                        <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
-                          <span className="p2p-metric-label">Pixel Distance</span>
-                          <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
-                            {p2pRouteResult.pixel_distance} px (Unprojected)
+                    <>
+                      <div className="p2p-metrics-grid">
+                        <div className="p2p-metric-item">
+                          <span className="p2p-metric-label">Path Length</span>
+                          <span className="p2p-metric-val">
+                            {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}
                           </span>
                         </div>
+                        <div className="p2p-metric-item">
+                          <span className="p2p-metric-label">Estimated Time</span>
+                          <span className="p2p-metric-val">
+                            {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                          </span>
+                        </div>
+                        {!p2pRouteResult.is_projected && (
+                          <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
+                            <span className="p2p-metric-label">Pixel Distance</span>
+                            <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
+                              {p2pRouteResult.pixel_distance} px (Unprojected)
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {p2pRouteResult.mode_label?.includes('ExG') && (
+                        <div style={{ fontSize: '9.5px', color: '#fbbf24', background: 'rgba(69, 26, 3, 0.6)', border: '1px solid #d97706', borderRadius: '4px', padding: '4px 6px', lineHeight: '1.3' }}>
+                          ⚠️ <b>Uncalibrated Proxy:</b> w_veg multiplier lacks field timing data. ExG-only travel times are relative impedance indices, not field-validated predictions.
+                        </div>
                       )}
-                    </div>
+                    </>
                   )}
 
                   <div className="p2p-actions">
