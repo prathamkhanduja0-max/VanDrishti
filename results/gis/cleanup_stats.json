@@ -1,15 +1,18 @@
 {
-  "input": 1998,
+  "raw_count": 1998,
+  "after_nms": 1998,
+  "nms_dropped": 0,
+  "after_size_filter": 1993,
+  "size_dropped": 5,
+  "after_centroid_dedup": 1973,
+  "dedup_dropped": 20,
+  "total_dropped": 25,
+  "retention_pct": 98.75,
   "params": {
-    "res_m": 0.1,
-    "iou": 0.35,
+    "iou_threshold": 0.35,
     "min_diam_m": 1.5,
     "max_diam_m": 30.0,
-    "min_sep_m": 2.0
-  },
-  "after_nms": 1998,
-  "after_size_filter": 1993,
-  "after_centroid_dedup": 1973,
-  "removed": 25,
-  "removed_pct": 1.25
+    "min_separation_m": 2.0,
+    "source_res_m": 0.1
+  }
 }

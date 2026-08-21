@@ -1,47 +1,22 @@
 """
 degradation_chm.py  -- VanDrishti
-
-The PRIMARY degradation signal for this project.
-
-Why this and not spectral indices:
-The two acquisitions are September 2018 and April 2019 -- a 7-month,
-cross-seasonal gap. Any ExG/VARI/GLI change therefore conflates leaf phenology
-with real canopy loss. Canopy HEIGHT does not have that problem: a stand does
-not lose 8 m of height because it is April instead of September. Spectral
-change becomes supporting evidence; height change is the finding.
-
-Classes (metres of height change):
-    removal   dH <= -5      a tree came down
-    thinning  -5 < dH <= -2  crown damage / partial loss
-    stable    -2 < dH <  +2  within noise
-    growth    dH >= +2       genuine growth or regrowth
-
-Honest caveats this script enforces rather than hides:
-  - A +/-2 m stable band is used because LiDAR CHM has real vertical
-    uncertainty between flights (different flight lines, point density,
-    interpolation). Anything inside that band is NOT reported as change.
-  - The script reports growth as well as loss. If "growth" pixels vastly
-    outnumber "removal" pixels, that is usually a co-registration or
-    processing difference between campaigns, NOT a forest that grew 3 m in
-    7 months. The script warns when that pattern appears.
-
-Usage:
-    python scripts/degradation_chm.py \
-        --chm-t1 data/raw/neon/large/OSBS_large_2018_CHM.tif \
-        --chm-t2 data/raw/neon/large/OSBS_large_2019_CHM.tif \
-        --out-raster results/gis/chm_change.tif \
-        --out-vector results/gis/chm_loss_polygons.geojson \
-        --stats-out  results/gis/chm_change_stats.json
+The PRIMARY degradation signal for this project using multi-temporal LiDAR CHM differencing.
+Reads thresholds and raster paths from config.yaml, keeping CLI flags as overrides.
 """
 
 import argparse
 import json
-
+from pathlib import Path
+import sys
 import geopandas as gpd
 import numpy as np
 import rasterio
 from rasterio.features import shapes
 from shapely.geometry import shape
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import config_loader
 
 CLASSES = {
     1: ("removal", None, -5.0),
@@ -51,12 +26,12 @@ CLASSES = {
 }
 
 
-def classify(dh):
+def classify(dh, loss_thresh=-5.0, thinning_thresh=-2.0, stable_band=2.0):
     out = np.zeros(dh.shape, dtype=np.uint8)
-    out[dh <= -5.0] = 1
-    out[(dh > -5.0) & (dh <= -2.0)] = 2
-    out[(dh > -2.0) & (dh < 2.0)] = 3
-    out[dh >= 2.0] = 4
+    out[dh <= loss_thresh] = 1
+    out[(dh > loss_thresh) & (dh <= thinning_thresh)] = 2
+    out[(dh > thinning_thresh) & (dh < stable_band)] = 3
+    out[dh >= stable_band] = 4
     out[~np.isfinite(dh)] = 0
     return out
 
@@ -83,19 +58,42 @@ def vectorise(cls_arr, target_classes, transform, crs, min_area_m2=4.0):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--chm-t1", required=True, help="earlier CHM (2018)")
-    ap.add_argument("--chm-t2", required=True, help="later CHM (2019)")
+    ap.add_argument("--config", default=None, help="Path to config.yaml")
+    ap.add_argument("--chm-t1", default=None, help="earlier CHM (2018)")
+    ap.add_argument("--chm-t2", default=None, help="later CHM (2019)")
     ap.add_argument("--out-raster", default=None)
     ap.add_argument("--out-vector", default=None)
     ap.add_argument("--stats-out", default=None)
-    ap.add_argument("--min-area", type=float, default=4.0)
+    ap.add_argument("--min-area", type=float, default=None)
     args = ap.parse_args()
 
-    with rasterio.open(args.chm_t1) as a:
+    cfg = None
+    cfg_path = args.config or (REPO_ROOT / "config.yaml")
+    if Path(cfg_path).exists():
+        cfg = config_loader.load(cfg_path)
+        rasters = config_loader.inspect_rasters(cfg)
+        caps = config_loader.assess(rasters)
+        if caps.get("degradation", {}).get("level") == "BLOCKED" and (not args.chm_t1 or not args.chm_t2):
+            missing = ", ".join(caps["degradation"]["missing"])
+            raise RuntimeError(f"Module 'degradation' is BLOCKED due to missing required data: {missing}. Aborting.")
+
+    # Resolve inputs (CLI override > config > default)
+    chm_t1_p = args.chm_t1 or (cfg.path("site", "rasters", "chm_t1") if cfg else None)
+    chm_t2_p = args.chm_t2 or (cfg.path("site", "rasters", "chm_t2") if cfg else None)
+
+    if not chm_t1_p or not chm_t2_p:
+        raise ValueError("Both --chm-t1 and --chm-t2 must be provided via CLI or declared in config.yaml")
+
+    loss_thresh = float(cfg.get("degradation", {}).get("loss_thresh_m", -5.0)) if cfg else -5.0
+    thinning_thresh = float(cfg.get("degradation", {}).get("thinning_thresh_m", -2.0)) if cfg else -2.0
+    stable_band = float(cfg.get("degradation", {}).get("stable_band_m", 2.0)) if cfg else 2.0
+    min_area = args.min_area if args.min_area is not None else (float(cfg.get("degradation", {}).get("min_area_m2", 4.0)) if cfg else 4.0)
+
+    with rasterio.open(chm_t1_p) as a:
         h1 = a.read(1).astype(np.float64)
         prof = a.profile.copy()
         nd1, bounds1 = a.nodata, a.bounds
-    with rasterio.open(args.chm_t2) as b:
+    with rasterio.open(chm_t2_p) as b:
         h2 = b.read(1).astype(np.float64)
         nd2, bounds2 = b.nodata, b.bounds
 
@@ -117,7 +115,7 @@ def main():
         h2 = np.where(h2 == nd2, np.nan, h2)
 
     dh = h2 - h1
-    cls_arr = classify(dh)
+    cls_arr = classify(dh, loss_thresh=loss_thresh, thinning_thresh=thinning_thresh, stable_band=stable_band)
 
     px_area = abs(prof["transform"].a * prof["transform"].e)
     total_valid = int(np.isfinite(dh).sum())
@@ -152,7 +150,6 @@ def main():
         c = counts[name]
         print(f"  {name:<10}: {c['pixels']:>7} px  {c['area_m2']:>9} m2  {c['pct']:>6}%")
 
-    # --- honesty checks -------------------------------------------------
     loss_px = counts["removal"]["pixels"] + counts["thinning"]["pixels"]
     growth_px = counts["growth"]["pixels"]
 
@@ -172,25 +169,28 @@ def main():
         print("  (which enforce a minimum area) rather than pixel counts.")
     print()
 
-    if args.out_raster:
-        prof.update(dtype="uint8", count=1, compress="lzw", nodata=0)
-        with rasterio.open(args.out_raster, "w", **prof) as dst:
-            dst.write(cls_arr, 1)
-        print(f"wrote change raster -> {args.out_raster}")
+    out_raster = args.out_raster or (cfg.path("outputs", "gis_dir") / "chm_change.tif" if cfg else None)
+    out_vector = args.out_vector or (cfg.path("outputs", "gis_dir") / "chm_loss_polygons.geojson" if cfg else None)
+    stats_out = args.stats_out or (cfg.path("outputs", "gis_dir") / "chm_change_stats.json" if cfg else None)
 
-    if args.out_vector:
-        gdf = vectorise(cls_arr, [1, 2], prof["transform"], prof["crs"],
-                        args.min_area)
-        gdf.to_file(args.out_vector, driver="GeoJSON")
-        print(f"wrote {len(gdf)} loss polygons -> {args.out_vector}")
+    if out_raster:
+        prof.update(dtype="uint8", count=1, compress="lzw", nodata=0)
+        with rasterio.open(out_raster, "w", **prof) as dst:
+            dst.write(cls_arr, 1)
+        print(f"wrote change raster -> {out_raster}")
+
+    if out_vector:
+        gdf = vectorise(cls_arr, [1, 2], prof["transform"], prof["crs"], min_area)
+        gdf.to_file(out_vector, driver="GeoJSON")
+        print(f"wrote {len(gdf)} loss polygons -> {out_vector}")
         stats["loss_polygons"] = int(len(gdf))
         stats["loss_polygon_area_m2"] = round(
             float(gdf["area_m2"].sum()), 1) if len(gdf) else 0.0
 
-    if args.stats_out:
-        with open(args.stats_out, "w") as f:
+    if stats_out:
+        with open(stats_out, "w") as f:
             json.dump(stats, f, indent=2)
-        print(f"wrote stats -> {args.stats_out}")
+        print(f"wrote stats -> {stats_out}")
 
 
 if __name__ == "__main__":

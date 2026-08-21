@@ -1,51 +1,24 @@
 """
 validate_detections_chm.py  -- VanDrishti
-
-Geometric NMS found almost nothing (1.25% removal) because DeepForest already
-suppresses overlapping boxes internally at IoU=0.15. So duplicate boxes are not
-the source of the "too dense" problem.
-
-A better test is available now that CHM data exists: if a detected "tree" sits
-where the canopy height model reads 0.4 m, it is not a tree. Height is
-independent evidence -- it comes from LiDAR, not from the same RGB pixels the
-detector already saw.
-
-Two outputs:
-
-  1. FILTER -- drop detections whose local canopy height is implausible.
-
-  2. CALIBRATION CHECK -- the priority engine assumes low confidence means the
-     model is uncertain. That is testable: bin detections by confidence and
-     look at the CHM height distribution in each bin. If low-confidence
-     detections really do sit on shorter/absent canopy, the assumption holds.
-     If height is flat across confidence bins, the assumption does NOT hold and
-     the HIGH-priority tier needs a different basis. Either result is worth
-     reporting -- do not discard the negative one.
-
-Usage:
-    python scripts/validate_detections_chm.py \
-        --trees results/gis/OSBS_large_2019_trees.geojson \
-        --chm   data/raw/neon/large/OSBS_large_2019_CHM.tif \
-        --out   results/gis/OSBS_large_2019_trees_chm_valid.geojson \
-        --min-height 2.0 --radius 1.5 \
-        --stats-out results/gis/chm_validation_stats.json
+Validates detected tree points against the Canopy Height Model (CHM) from LiDAR.
+Reads thresholds and raster paths from config.yaml with CLI flag overrides.
 """
 
 import argparse
 import json
+from pathlib import Path
+import sys
 
 import geopandas as gpd
 import numpy as np
 import rasterio
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import config_loader
+
 
 def sample_max_in_radius(chm, transform, xs, ys, radius_m):
-    """Max CHM value within radius_m of each point.
-
-    Max, not the single centre pixel, because the detected crown centroid and
-    the 1 m CHM grid will not line up exactly -- a 0.1 m RGB centroid can fall
-    on a CHM cell that happens to catch a gap between branches.
-    """
     res = abs(transform.a)
     rad_px = max(1, int(np.ceil(radius_m / res)))
     h, w = chm.shape
@@ -68,12 +41,6 @@ def sample_max_in_radius(chm, transform, xs, ys, radius_m):
 
 
 def calibration_table(conf, height, n_bins=5):
-    """Height distribution per confidence bin.
-
-    If the priority engine's premise is sound, mean height should RISE with
-    confidence. A flat table means confidence is not tracking whether a real
-    tree is present.
-    """
     edges = np.nanpercentile(conf, np.linspace(0, 100, n_bins + 1))
     edges[-1] += 1e-9
     rows = []
@@ -96,90 +63,104 @@ def calibration_table(conf, height, n_bins=5):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--trees", required=True)
-    ap.add_argument("--chm", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--min-height", type=float, default=2.0,
-                    help="minimum plausible canopy height in metres")
-    ap.add_argument("--radius", type=float, default=1.5,
-                    help="search radius around each detection, metres")
-    ap.add_argument("--conf-col", default="confidence")
+    ap.add_argument("--config", default=None)
+    ap.add_argument("--trees", default=None)
+    ap.add_argument("--chm", default=None)
+    ap.add_argument("--out", default=None)
+    ap.add_argument("--min-height", type=float, default=None)
+    ap.add_argument("--radius", type=float, default=None)
     ap.add_argument("--stats-out", default=None)
     args = ap.parse_args()
 
-    gdf = gpd.read_file(args.trees)
-    print(f"read {len(gdf)} detections, CRS={gdf.crs}")
+    cfg = None
+    cfg_path = args.config or (REPO_ROOT / "config.yaml")
+    if Path(cfg_path).exists():
+        cfg = config_loader.load(cfg_path)
 
-    with rasterio.open(args.chm) as src:
+    trees_p = args.trees or (cfg.path("detection", "raw_trees_geojson") if cfg else None)
+    chm_p = args.chm or (cfg.path("site", "rasters", "chm_t2") if cfg else None)
+
+    if not trees_p or not chm_p:
+        raise ValueError("Both --trees and --chm must be provided via CLI or declared in config.yaml")
+
+    min_h = args.min_height if args.min_height is not None else (float(cfg.get("detection", {}).get("chm_min_height", 2.0)) if cfg else 2.0)
+    radius = args.radius if args.radius is not None else (float(cfg.get("detection", {}).get("chm_radius", 1.5)) if cfg else 1.5)
+
+    with rasterio.open(chm_p) as src:
         chm = src.read(1).astype(np.float64)
-        if src.nodata is not None:
-            chm = np.where(chm == src.nodata, np.nan, chm)
         transform = src.transform
         chm_crs = src.crs
+        nd = src.nodata
 
+    if nd is not None:
+        chm = np.where(chm == nd, np.nan, chm)
+
+    gdf = gpd.read_file(trees_p)
     if gdf.crs != chm_crs:
-        print(f"reprojecting detections {gdf.crs} -> {chm_crs}")
+        print(f"Reprojecting trees ({gdf.crs}) -> CHM ({chm_crs})")
         gdf = gdf.to_crs(chm_crs)
 
-    pts = gdf.geometry.centroid
-    height = sample_max_in_radius(
-        chm, transform, pts.x.to_numpy(), pts.y.to_numpy(), args.radius
-    )
-    gdf["chm_height_m"] = np.round(height, 2)
+    xs = gdf.geometry.x.to_numpy()
+    ys = gdf.geometry.y.to_numpy()
 
-    outside = int(np.isnan(height).sum())
-    if outside:
-        print(f"WARNING: {outside} detections fell outside the CHM extent "
-              "-- check that the CHM covers the full study area")
+    h_sampled = sample_max_in_radius(chm, transform, xs, ys, radius_m=radius)
+    gdf["chm_height_m"] = np.round(h_sampled, 2)
 
-    conf = gdf[args.conf_col].to_numpy(dtype=np.float64)
-    calib = calibration_table(conf, height)
+    valid_mask = np.isfinite(h_sampled) & (h_sampled >= min_h)
+    gdf_valid = gdf.loc[valid_mask].copy()
 
-    keep = np.nan_to_num(height, nan=-1.0) >= args.min_height
-    out = gdf.loc[keep].copy()
+    n_raw = len(gdf)
+    n_valid = len(gdf_valid)
+    n_dropped = n_raw - n_valid
+
+    conf_col = "confidence" if "confidence" in gdf.columns else ("score" if "score" in gdf.columns else None)
+    calib = calibration_table(gdf[conf_col].to_numpy(), h_sampled) if conf_col else []
 
     stats = {
-        "input": int(len(gdf)),
-        "kept": int(keep.sum()),
-        "dropped": int((~keep).sum()),
-        "dropped_pct": round(100.0 * (~keep).sum() / len(gdf), 2),
-        "outside_chm_extent": outside,
-        "min_height_m": args.min_height,
-        "radius_m": args.radius,
-        "height_median_m": round(float(np.nanmedian(height)), 2),
-        "height_p95_m": round(float(np.nanpercentile(height, 95)), 2),
-        "calibration_by_confidence": calib,
+        "raw_count": n_raw,
+        "valid_count": n_valid,
+        "dropped_count": n_dropped,
+        "retention_pct": round(100.0 * n_valid / n_raw, 2) if n_raw else 0.0,
+        "height_stats_all": {
+            "mean_m": round(float(np.nanmean(h_sampled)), 2),
+            "median_m": round(float(np.nanmedian(h_sampled)), 2),
+            "p5_m": round(float(np.nanpercentile(h_sampled, 5)), 2),
+            "p95_m": round(float(np.nanpercentile(h_sampled, 95)), 2),
+        },
+        "params": {
+            "min_height_m": min_h,
+            "search_radius_m": radius,
+        },
+        "confidence_calibration": calib,
     }
 
-    print("\n--- CHM validation ---")
-    for k in ["input", "kept", "dropped", "dropped_pct", "height_median_m"]:
-        print(f"  {k:<22}: {stats[k]}")
-
-    print("\n--- Confidence vs canopy height ---")
-    print(f"  {'conf range':<18}{'n':>6}{'mean h':>9}{'% <2m':>9}")
-    for r in calib:
-        rng = f"{r['conf_range'][0]:.3f}-{r['conf_range'][1]:.3f}"
-        print(f"  {rng:<18}{r['n']:>6}{r['height_mean_m']:>9}{r['pct_under_2m']:>9}")
-
-    if len(calib) >= 2:
-        lo, hi = calib[0]["height_mean_m"], calib[-1]["height_mean_m"]
-        spread = hi - lo
-        print(f"\n  height spread lowest->highest conf bin: {spread:+.2f} m")
-        if abs(spread) < 1.0:
-            print("  => Confidence barely tracks canopy height. The priority")
-            print("     engine's 'low confidence = uncertain detection'")
-            print("     assumption is NOT supported here. Report this.")
-        else:
-            print("  => Confidence tracks canopy height. The assumption holds.")
+    print("\n--- Detection validation against CHM ---")
+    print(f"  raw detections       : {n_raw:>5}")
+    print(f"  valid (height >= {min_h}m): {n_valid:>5}  ({stats['retention_pct']}%)")
+    print(f"  dropped (short/empty): {n_dropped:>5}")
+    print(f"  sampled height mean  : {stats['height_stats_all']['mean_m']} m "
+          f"(median {stats['height_stats_all']['median_m']} m)")
     print()
 
-    out.to_file(args.out, driver="GeoJSON")
-    print(f"wrote {len(out)} validated detections -> {args.out}")
+    if calib:
+        print("  Confidence -> CHM height calibration:")
+        print("    conf range         n   mean_h  med_h   % < 2m")
+        for row in calib:
+            cr = f"[{row['conf_range'][0]:.2f}, {row['conf_range'][1]:.2f})"
+            print(f"    {cr:<16} {row['n']:>5}  {row['height_mean_m']:>5.1f}m "
+                  f"{row['height_median_m']:>5.1f}m  {row['pct_under_2m']:>5.1f}%")
+        print()
 
-    if args.stats_out:
-        with open(args.stats_out, "w") as f:
+    out_p = args.out or (cfg.path("outputs", "gis_dir") / f"{cfg.get('site',{}).get('name','study_area')}_trees_chm_valid.geojson" if cfg else None)
+    if out_p:
+        gdf_valid.to_file(out_p, driver="GeoJSON")
+        print(f"wrote validated detections -> {out_p}")
+
+    stats_out = args.stats_out or (cfg.path("outputs", "gis_dir") / "chm_validation_stats.json" if cfg else None)
+    if stats_out:
+        with open(stats_out, "w") as f:
             json.dump(stats, f, indent=2)
-        print(f"wrote stats -> {args.stats_out}")
+        print(f"wrote stats -> {stats_out}")
 
 
 if __name__ == "__main__":

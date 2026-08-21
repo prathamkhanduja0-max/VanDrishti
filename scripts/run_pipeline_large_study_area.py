@@ -1,37 +1,112 @@
 """
 run_pipeline_large_study_area.py
-Full clean GIS, Priority, and Dijkstra routing pipeline for the 250m OSBS Large 2019 Study Area.
+Full clean GIS, Priority, and Dijkstra routing pipeline for any configured study area.
+Driven entirely by config.yaml via config_loader.py (zero hardcoded paths, coordinates, or CRS).
 """
 
 import math
 from pathlib import Path
+import sys
+from typing import Optional, Union
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
 import rasterio
-from shapely.geometry import Polygon, LineString, Point
+from shapely.geometry import LineString, Point, Polygon, box
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import config_loader
 
 
-def run_full_pipeline():
-    project_root = Path(__file__).resolve().parent.parent
-    tif_path = project_root / "data" / "raw" / "neon" / "large" / "OSBS_large_2019.tif"
-    raw_trees_geojson = project_root / "results" / "gis" / "OSBS_large_2019_trees.geojson"
-    gis_dir = project_root / "results" / "gis"
+def get_corridor_polygon(cfg, bounds):
+    """
+    Returns corridor polygon supporting both:
+      - 'polygon' / 'explicit' mode: coordinates given in config
+      - 'auto' mode: generated from bearing, width, and offset relative to tile center.
+    """
+    corr_cfg = cfg.get("corridor", {})
+    mode = corr_cfg.get("mode", "polygon")
+
+    if mode in ("polygon", "explicit") and "polygon_coords" in corr_cfg and corr_cfg["polygon_coords"]:
+        coords = [tuple(pt) for pt in corr_cfg["polygon_coords"]]
+        return Polygon(coords)
+
+    # auto mode
+    auto_cfg = corr_cfg.get("auto", {})
+    bearing_deg = float(auto_cfg.get("bearing_deg", 22.0))
+    width_m = float(auto_cfg.get("width_m", 60.0))
+    offset_m = float(auto_cfg.get("offset_m", 0.0))
+
+    left, bottom, right, top = bounds.left, bounds.bottom, bounds.right, bounds.top
+    cx = (left + right) / 2.0
+    cy = (bottom + top) / 2.0
+
+    rad = math.radians(bearing_deg)
+    dx, dy = math.cos(rad), math.sin(rad)
+    nx_norm, ny_norm = -dy, dx
+
+    cx += nx_norm * offset_m
+    cy += ny_norm * offset_m
+
+    diag = math.hypot(right - left, top - bottom)
+    half_len = diag * 0.75
+    half_w = width_m / 2.0
+
+    p1 = (cx - dx * half_len + nx_norm * half_w, cy - dy * half_len + ny_norm * half_w)
+    p2 = (cx - dx * half_len - nx_norm * half_w, cy - dy * half_len - ny_norm * half_w)
+    p3 = (cx + dx * half_len - nx_norm * half_w, cy + dy * half_len - ny_norm * half_w)
+    p4 = (cx + dx * half_len + nx_norm * half_w, cy + dy * half_len - ny_norm * half_w)
+
+    tile_box = box(left, bottom, right, top)
+    return Polygon([p1, p2, p3, p4]).intersection(tile_box)
+
+
+def get_entry_point(cfg, bounds):
+    """Returns entry point from config or defaults to bottom-left corner."""
+    routing_cfg = cfg.get("routing", {})
+    ep = routing_cfg.get("entry_point", "auto")
+    if ep == "auto" or not isinstance(ep, (list, tuple)):
+        return (bounds.left, bounds.bottom)
+    return (float(ep[0]), float(ep[1]))
+
+
+def run_full_pipeline(config_path: Optional[Union[str, Path]] = None):
+    if config_path is None:
+        config_path = REPO_ROOT / "config.yaml"
+    cfg = config_loader.load(config_path)
+
+    # Startup Capability Assessment
+    rasters = config_loader.inspect_rasters(cfg)
+    caps = config_loader.assess(rasters)
+    for mod in ["detection", "priority", "routing"]:
+        if caps.get(mod, {}).get("level") == "BLOCKED":
+            missing = ", ".join(caps[mod]["missing"])
+            raise RuntimeError(f"Module '{mod}' is BLOCKED due to missing required data: {missing}. Aborting.")
+
+    site_name = cfg.get("site", {}).get("name", "study_area")
+    tif_path = cfg.path("site", "rasters", "rgb_t2", required=True)
+    raw_trees_geojson = cfg.path("detection", "raw_trees_geojson", required=True)
+    gis_dir = cfg.path("outputs", "gis_dir") or (REPO_ROOT / "results" / "gis")
     gis_dir.mkdir(parents=True, exist_ok=True)
 
-    out_filtered_geojson = gis_dir / "OSBS_large_2019_trees_filtered.geojson"
-    out_boundary_geojson = gis_dir / "OSBS_large_2019_boundary.geojson"
-    out_trees_boundary_geojson = gis_dir / "OSBS_large_2019_trees_with_boundary_status.geojson"
-    out_priority_geojson = gis_dir / "OSBS_large_2019_verification_priority.geojson"
-    out_route_geojson = gis_dir / "OSBS_large_2019_field_route_lcp.geojson"
-    out_overview_map = gis_dir / "OSBS_large_2019_overview_map.png"
+    out_filtered_geojson = gis_dir / f"{site_name}_trees_filtered.geojson"
+    out_boundary_geojson = gis_dir / f"{site_name}_boundary.geojson"
+    out_trees_boundary_geojson = gis_dir / f"{site_name}_trees_with_boundary_status.geojson"
+    out_priority_geojson = gis_dir / f"{site_name}_verification_priority.geojson"
+    out_route_geojson = gis_dir / f"{site_name}_field_route_lcp.geojson"
+    out_overview_map = gis_dir / f"{site_name}_overview_map.png"
 
-    # =========================================================================
+    min_conf = float(cfg.get("detection", {}).get("min_conf", 0.50))
+    conf_low = float(cfg.get("priority", {}).get("conf_low", 0.515))
+    conf_mid = float(cfg.get("priority", {}).get("conf_mid", 0.60))
+    w_veg = float(cfg.get("routing", {}).get("w_veg", 4.0))
+    grid_res_m = float(cfg.get("routing", {}).get("grid_res_m", 1.0))
+
     # STEP 0: Load Base Raster
-    # =========================================================================
-    print("=== STEP 0: Loading 250m Base GeoTIFF ===")
+    print(f"=== STEP 0: Loading Study Area Base GeoTIFF ({site_name}) ===")
     with rasterio.open(tif_path) as ds:
         raster_crs = ds.crs
         bounds = ds.bounds
@@ -48,38 +123,28 @@ def run_full_pipeline():
     print(f"Bounds:     {bounds}")
     print(f"Dimensions: {orig_w}x{orig_h} px | {width_m:.1f}m x {height_m:.1f}m")
 
-    # =========================================================================
-    # STEP 1: Filter to Reliable Trees (Confidence >= 0.50)
-    # =========================================================================
-    print("\n=== STEP 1: Filtering Reliable Trees (Confidence >= 0.50) ===")
+    # STEP 1: Filter to Reliable Trees
+    print(f"\n=== STEP 1: Filtering Reliable Trees (Confidence >= {min_conf:.2f}) ===")
     gdf_raw = gpd.read_file(raw_trees_geojson)
     total_raw_trees = len(gdf_raw)
-    gdf_filtered = gdf_raw[gdf_raw["confidence"] >= 0.50].copy().reset_index(drop=True)
+    gdf_filtered = gdf_raw[gdf_raw["confidence"] >= min_conf].copy().reset_index(drop=True)
     total_filtered_trees = len(gdf_filtered)
     
     gdf_filtered.to_file(out_filtered_geojson, driver="GeoJSON")
     print(f"Raw Trees:      {total_raw_trees}")
-    print(f"Filtered Trees: {total_filtered_trees} (Confidence >= 0.50)")
+    print(f"Filtered Trees: {total_filtered_trees} (Confidence >= {min_conf:.2f})")
     print(f"Saved:          {out_filtered_geojson.name}")
 
-    # =========================================================================
-    # STEP 2: Project Boundary Corridor (24% of Tile Area) & Tagging
-    # =========================================================================
-    print("\n=== STEP 2: Creating Synthetic Project Corridor & Spatial Tagging ===")
-    # Diagonal corridor polygon across the middle of the 250m tile
-    corridor_poly = Polygon([
-        (407700.0, 3283800.0),
-        (407700.0, 3283860.0),
-        (407950.0, 3283960.0),
-        (407950.0, 3283900.0),
-    ])
+    # STEP 2: Project Boundary Corridor & Spatial Tagging
+    print("\n=== STEP 2: Building Project Corridor & Spatial Tagging ===")
+    corridor_poly = get_corridor_polygon(cfg, bounds)
     corridor_area = corridor_poly.area
     tile_area = width_m * height_m
     coverage_pct = (corridor_area / tile_area) * 100.0
 
     gdf_boundary = gpd.GeoDataFrame(
         [{
-            "name": "OSBS Large 2019 Infrastructure Corridor",
+            "name": f"{site_name} Infrastructure Corridor",
             "area_sq_m": round(corridor_area, 2),
             "tile_coverage_pct": round(coverage_pct, 2),
         }],
@@ -100,19 +165,13 @@ def run_full_pipeline():
     print(f"Trees Outside Corridor: {outside_count}")
     print(f"Saved:                  {out_trees_boundary_geojson.name}")
 
-    # =========================================================================
     # STEP 3: Verification Priority Assignment
-    # =========================================================================
     print("\n=== STEP 3: Assigning Verification Priority ===")
-    # Reusing OSBS_022 logic with calibrated threshold for ~8-15 clean HIGH priority stops
-    # Inside corridor + confidence <= 0.515 -> HIGH (13 trees)
-    # Inside corridor (higher confidence) OR outside corridor (moderate confidence <= 0.60) -> MEDIUM
-    # Outside corridor + confidence > 0.60 -> LOW
     def determine_priority(row):
         conf = row["confidence"]
         inside = row["inside_boundary"]
         
-        if inside and conf <= 0.515:
+        if inside and conf <= conf_low:
             return pd.Series([
                 "HIGH",
                 "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)"
@@ -122,7 +181,7 @@ def run_full_pipeline():
                 "MEDIUM",
                 f"Inside project corridor (corridor impact, statutory check) [Conf: {conf:.1%}]"
             ], index=["verification_priority", "priority_reason"])
-        elif conf <= 0.60:
+        elif conf <= conf_mid:
             return pd.Series([
                 "MEDIUM",
                 f"Outside corridor with moderate confidence [Conf: {conf:.1%}]"
@@ -149,27 +208,25 @@ def run_full_pipeline():
     print(f"MEDIUM Priority Trees: {med_count}")
     print(f"LOW Priority Trees:    {low_count}")
 
-    # =========================================================================
-    # STEP 4: Terrain-Aware Dijkstra Least-Cost Path (LCP) Field Route
-    # =========================================================================
-    print("\n=== STEP 4: Terrain-Aware Dijkstra Least-Cost Path Routing ===")
-    grid_h, grid_w = 250, 250
-    cell_size_x = width_m / grid_w  # 1.0 m
-    cell_size_y = height_m / grid_h  # 1.0 m
-    cell_size = (cell_size_x + cell_size_y) / 2.0  # 1.0 m
+    # STEP 4: Dijkstra Least-Cost Path (LCP) Field Route
+    print("\n=== STEP 4: Dijkstra Least-Cost Path Routing ===")
+    grid_w = int(round(width_m / grid_res_m))
+    grid_h = int(round(height_m / grid_res_m))
+    cell_size_x = width_m / grid_w
+    cell_size_y = height_m / grid_h
+    cell_size = (cell_size_x + cell_size_y) / 2.0
     print(f"Cost Surface Discretization: {grid_w}x{grid_h} grid | Cell Size: {cell_size:.2f}m x {cell_size:.2f}m")
 
-    # Downsample RGB from 2500x2500 to 250x250 via 10x10 block averaging
+    scale_y = orig_h // grid_h
+    scale_x = orig_w // grid_w
     rgb_float = rgb_data.astype(np.float64)
-    rgb_down = rgb_float.reshape(3, grid_h, 10, grid_w, 10).mean(axis=(2, 4))
+    rgb_down = rgb_float[:, :grid_h * scale_y, :grid_w * scale_x].reshape(3, grid_h, scale_y, grid_w, scale_x).mean(axis=(2, 4))
     r_ch, g_ch, b_ch = rgb_down[0], rgb_down[1], rgb_down[2]
 
-    # Excess Green Index (ExG = 2G - R - B)
     exg = 2.0 * g_ch - r_ch - b_ch
     p1, p99 = np.percentile(exg, 1), np.percentile(exg, 99)
     exg_norm = np.clip((exg - p1) / (p99 - p1 + 1e-6), 0.0, 1.0)
-    cost_surface = 1.0 + 4.0 * exg_norm
-    print(f"Cost Surface: Min={cost_surface.min():.2f}, Max={cost_surface.max():.2f}, Mean={cost_surface.mean():.2f}")
+    cost_surface = 1.0 + w_veg * exg_norm
 
     def utm_to_grid(x, y):
         c = int(np.clip((x - bounds.left) / cell_size_x, 0, grid_w - 1))
@@ -181,7 +238,6 @@ def run_full_pipeline():
         y = bounds.top - (r + 0.5) * cell_size_y
         return (x, y)
 
-    # 8-connected grid graph
     G = nx.Graph()
     edges = []
     SQRT2 = math.sqrt(2.0)
@@ -203,10 +259,8 @@ def run_full_pipeline():
                     edges.append((u, (r + 1, c - 1), w))
 
     G.add_weighted_edges_from(edges)
-    print(f"Graph built: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
 
-    # Ranger Entry Point (Bottom-Left Corner)
-    entry_x, entry_y = bounds.left, bounds.bottom
+    entry_x, entry_y = get_entry_point(cfg, bounds)
     entry_grid = utm_to_grid(entry_x, entry_y)
 
     gdf_high = gdf_filtered[gdf_filtered["verification_priority"] == "HIGH"].copy().reset_index(drop=True)
@@ -236,7 +290,6 @@ def run_full_pipeline():
             "conf": row["confidence"]
         }
 
-    # Dijkstra distance matrix
     wp_keys = list(waypoint_nodes.keys())
     dijkstra_matrix = {u: {} for u in wp_keys}
     for u in wp_keys:
@@ -248,7 +301,6 @@ def run_full_pipeline():
                     G, waypoint_nodes[u], waypoint_nodes[v], weight="weight"
                 )
 
-    # Nearest-Neighbor visiting sequence
     unvisited = set(wp_keys)
     unvisited.remove("ENTRY")
     current_wp = "ENTRY"
@@ -297,19 +349,18 @@ def run_full_pipeline():
         current_wp = next_wp
         step_idx += 1
 
-    # Save LineString GeoJSON
     route_line_geom = LineString(stitched_utm_coords)
     gdf_route = gpd.GeoDataFrame(
         [{
-            "route_name": "OSBS Large 2019 Dijkstra Least-Cost Path",
-            "study_area": "250m x 250m (6.25 ha)",
+            "route_name": f"{site_name} Dijkstra Least-Cost Path",
+            "study_area": f"{width_m:.0f}m x {height_m:.0f}m ({tile_area/10000:.2f} ha)",
             "total_physical_distance_meters": round(total_physical_dist_m, 2),
             "total_least_cost_score": round(total_weighted_cost, 2),
             "stops_count": len(gdf_high),
             "visiting_sequence": " -> ".join([waypoint_info[n]["name"] for n in route_sequence]),
             "grid_resolution_meters": round(cell_size, 2),
             "grid_dimensions": f"{grid_w}x{grid_h}",
-            "cost_surface_model": "ExG (2G-R-B) canopy impedance scaled to [1.0, 5.0]",
+            "cost_surface_model": f"ExG canopy impedance scaled to [1.0, {1.0+w_veg}]",
         }],
         geometry=[route_line_geom],
         crs=raster_crs
@@ -318,17 +369,13 @@ def run_full_pipeline():
     print(f"Total Dijkstra LCP Distance: {total_physical_dist_m:.2f} m across {len(gdf_high)} stops")
     print(f"Saved:                       {out_route_geojson.name}")
 
-    # =========================================================================
     # STEP 5: Overview Map Visualization
-    # =========================================================================
     print("\n=== STEP 5: Generating High-Resolution Overview Map ===")
     fig, ax = plt.subplots(figsize=(14, 14), dpi=200)
     extent = [bounds.left, bounds.right, bounds.bottom, bounds.top]
 
-    # A. Base RGB image
     ax.imshow(rgb_display, extent=extent, origin="upper")
 
-    # B. Semi-transparent Walkability Cost Heatmap
     cost_heatmap = ax.imshow(
         cost_surface,
         extent=extent,
@@ -336,18 +383,16 @@ def run_full_pipeline():
         cmap="YlGn_r",
         alpha=0.25,
         vmin=1.0,
-        vmax=5.0
+        vmax=1.0 + w_veg
     )
     cbar = plt.colorbar(cost_heatmap, ax=ax, fraction=0.032, pad=0.02)
-    cbar.set_label("Walkability Impedance (1.0 = Open Bare Ground, 5.0 = Dense Canopy)", fontsize=10)
+    cbar.set_label("Walkability Impedance (1.0 = Open Bare Ground, High = Dense Canopy)", fontsize=10)
 
-    # C. Project Boundary Corridor
     gdf_boundary.boundary.plot(
-        ax=ax, color="red", linewidth=2.5, linestyle="--", label="Project Corridor (24% Tile Area)"
+        ax=ax, color="red", linewidth=2.5, linestyle="--", label=f"Project Corridor ({coverage_pct:.0f}% Tile Area)"
     )
     gdf_boundary.plot(ax=ax, facecolor="red", alpha=0.10)
 
-    # D. Filtered Trees by Priority
     gdf_low_p = gdf_filtered[gdf_filtered["verification_priority"] == "LOW"]
     gdf_med_p = gdf_filtered[gdf_filtered["verification_priority"] == "MEDIUM"]
 
@@ -377,7 +422,6 @@ def run_full_pipeline():
             zorder=4
         )
 
-    # E. Dijkstra Least-Cost Path
     xs, ys = zip(*stitched_utm_coords)
     ax.plot(
         xs,
@@ -389,7 +433,6 @@ def run_full_pipeline():
         zorder=5
     )
 
-    # F. Directional Arrows along the Route
     n_pts = len(stitched_utm_coords)
     for frac in [0.08, 0.20, 0.35, 0.50, 0.65, 0.80, 0.92]:
         idx = int(n_pts * frac)
@@ -406,7 +449,6 @@ def run_full_pipeline():
                     zorder=6
                 )
 
-    # G. Ranger Entry Point
     ax.scatter(
         [entry_x],
         [entry_y],
@@ -430,7 +472,6 @@ def run_full_pipeline():
         zorder=8
     )
 
-    # H. Numbered HIGH Priority Stops
     for stop_num, node_id in enumerate(route_sequence[1:], 1):
         gx, gy = waypoint_info[node_id]["utm"]
         t_id = waypoint_info[node_id]["tree_id"]
@@ -459,14 +500,14 @@ def run_full_pipeline():
         )
 
     ax.set_title(
-        f"VanDrishti: 250m Study Area Overview & Field Verification Route (OSBS Large 2019)\n"
+        f"VanDrishti: Study Area Overview & Field Verification Route ({site_name})\n"
         f"Filtered Trees: {total_filtered_trees} | HIGH Stops: {len(gdf_high)} | LCP Route: {total_physical_dist_m:.1f} m",
         fontsize=13,
         fontweight="bold",
         pad=14
     )
-    ax.set_xlabel("UTM Easting (m) [EPSG:32617]", fontsize=11)
-    ax.set_ylabel("UTM Northing (m) [EPSG:32617]", fontsize=11)
+    ax.set_xlabel(f"Easting (m) [{raster_crs}]", fontsize=11)
+    ax.set_ylabel(f"Northing (m) [{raster_crs}]", fontsize=11)
     ax.set_xlim(bounds.left, bounds.right)
     ax.set_ylim(bounds.bottom, bounds.top)
     ax.grid(True, linestyle=":", alpha=0.35, color="white")
@@ -477,13 +518,11 @@ def run_full_pipeline():
     plt.close()
     print(f"Saved Overview Map: {out_overview_map.name}")
 
-    # =========================================================================
     # STEP 6: Summary Report
-    # =========================================================================
     print("\n" + "="*70)
-    print("      VAN-DRISHTI: OSBS LARGE 2019 (250m) PIPELINE REPORT")
+    print(f"      VAN-DRISHTI: {site_name.upper()} PIPELINE REPORT")
     print("="*70)
-    print(f"1. Reliable Trees (Confidence >= 0.50): {total_filtered_trees} (from 1,998 raw detections)")
+    print(f"1. Reliable Trees (Confidence >= {min_conf:.2f}): {total_filtered_trees} (from {total_raw_trees} raw detections)")
     print(f"2. Corridor Impact Status:")
     print(f"   - Inside Infrastructure Corridor:   {inside_count} trees ({inside_count/total_filtered_trees*100:.1f}%)")
     print(f"   - Outside Corridor (Safe Buffer):   {outside_count} trees ({outside_count/total_filtered_trees*100:.1f}%)")
@@ -491,14 +530,11 @@ def run_full_pipeline():
     print(f"   - HIGH Priority (Audit Targets):    {high_count} trees")
     print(f"   - MEDIUM Priority (Corridor/Mod):   {med_count} trees")
     print(f"   - LOW Priority (Safe / High Conf):  {low_count} trees")
-    print(f"4. Terrain-Aware Dijkstra Field Route:")
+    print(f"4. Dijkstra Field Route:")
     print(f"   - Target Audit Stops:               {len(gdf_high)} stops")
-    print(f"   - Start Point:                      Ranger Base (407700.0, 3283750.0 UTM)")
-    print(f"   - Cost Grid Cell Size:              {cell_size:.2f} m x {cell_size:.2f} m (250x250 cells)")
+    print(f"   - Start Point:                      Ranger Base ({entry_x:.1f}, {entry_y:.1f})")
+    print(f"   - Cost Grid Cell Size:              {cell_size:.2f} m x {cell_size:.2f} m ({grid_w}x{grid_h} cells)")
     print(f"   - Total Least-Cost Path Length:     {total_physical_dist_m:.2f} meters")
-    print(f"   - Visiting Sequence:")
-    for leg in legs_info:
-        print(f"     Leg {leg['leg']:2d}: {leg['from_name']:<25} -> {leg['to_name']:<12} ({leg['physical_dist_m']:6.2f} m, cumulative: {leg['cumulative_phys_dist_m']:6.2f} m)")
     print("="*70)
 
     return {

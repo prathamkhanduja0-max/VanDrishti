@@ -1,0 +1,55 @@
+{
+  "type": "FeatureCollection",
+  "name": "TEAK_043_2018_boundary",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "TEAK_043_2018 Infrastructure Corridor",
+        "area_sq_m": 448.73,
+        "tile_coverage_pct": 28.05
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -119.0111666,
+              36.9995322
+            ],
+            [
+              -119.0112619,
+              36.9995306
+            ],
+            [
+              -119.0112634,
+              36.9995889
+            ],
+            [
+              -119.0108328,
+              36.9998984
+            ],
+            [
+              -119.0108221,
+              36.9998986
+            ],
+            [
+              -119.0108201,
+              36.9998221
+            ],
+            [
+              -119.0111666,
+              36.9995322
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

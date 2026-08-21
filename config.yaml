@@ -1,0 +1,69 @@
+# VanDrishti Configuration File
+
+site:
+  name: "OSBS_large_2019"
+  description: "Ordway-Swisher Biological Station (OSBS), Florida, NEON Domain D03"
+  rasters:
+    rgb_t2: "data/raw/neon/large/OSBS_large_2019.tif"
+    rgb_t1: "data/raw/neon/large/OSBS_large_2018_RGB.tif"
+    chm_t2: "data/raw/neon/large/OSBS_large_2019_CHM.tif"
+    chm_t1: "data/raw/neon/large/OSBS_large_2018_CHM.tif"
+    dtm: "data/raw/neon/large/OSBS_large_2019_DTM.tif"
+    dsm: null
+
+study_area:
+  size_m: [250.0, 250.0]
+  origin: "auto" # "auto" or [left, bottom]
+
+corridor:
+  mode: "polygon" # "polygon" (explicit) or "auto"
+  polygon_coords:
+    - [407700.0, 3283800.0]
+    - [407700.0, 3283860.0]
+    - [407950.0, 3283960.0]
+    - [407950.0, 3283900.0]
+  auto:
+    bearing_deg: 22.0
+    width_m: 60.0
+    offset_m: 0.0
+
+detection:
+  raw_trees_geojson: "results/gis/OSBS_large_2019_trees.geojson"
+  min_conf: 0.50
+  min_diam_m: 1.5
+  min_sep_m: 2.0
+  chm_min_height: 2.0
+  chm_radius: 1.5
+
+priority:
+  conf_low: 0.515
+  conf_mid: 0.60
+  weights:
+    corridor_impact: 1.0
+    uncertainty: 1.0
+
+routing:
+  w_veg: 4.0
+  max_slope_deg: 45.0
+  grid_res_m: 1.0
+  impedance: "chm" # "chm" or "exg"
+  entry_point: "auto" # "auto" = bottom-left corner of bounding box, or [x, y]
+  optimization_metric: "time" # "time" or "distance"
+
+degradation:
+  loss_thresh_m: -5.0
+  thinning_thresh_m: -2.0
+  stable_band_m: 2.0
+  edge_grad_max: 2.0
+  min_area_m2: 4.0
+
+health:
+  cell_size_m: 25.0
+  weights:
+    canopy_cover: 0.30
+    structural_diversity: 0.30
+    degradation_penalty: 0.40
+
+outputs:
+  gis_dir: "results/gis"
+  frontend_dir: "frontend/public/data"

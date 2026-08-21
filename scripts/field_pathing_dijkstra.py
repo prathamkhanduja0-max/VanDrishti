@@ -1,6 +1,6 @@
 """
 field_pathing_dijkstra.py
-Upgraded Module 2: Terrain-Aware Dijkstra Least-Cost Path (LCP) routing.
+Upgraded Module 2: Terrain-Aware Dijkstra Least-Cost Path (LCP) routing for OSBS_022 demo tile.
 Generates an obstacle/canopy-avoiding field verification route for HIGH priority trees
 using an Excess Green (ExG) vegetation cost surface and 8-connected grid Dijkstra shortest path.
 Saves LCP route to GeoJSON and generates a high-resolution comparison map.
@@ -8,6 +8,7 @@ Saves LCP route to GeoJSON and generates a high-resolution comparison map.
 
 import math
 from pathlib import Path
+import sys
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -15,14 +16,17 @@ import numpy as np
 import rasterio
 from shapely.geometry import LineString, Point
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import config_loader
+
 
 def generate_dijkstra_field_route():
-    project_root = Path(__file__).resolve().parent.parent
-    tif_path = project_root / "data" / "processed" / "yolo" / "images" / "test" / "OSBS_022_2019.tif"
-    input_geojson = project_root / "results" / "gis" / "OSBS_022_2019_verification_priority.geojson"
-    boundary_geojson = project_root / "data" / "demo" / "project_boundary_OSBS_022.geojson"
+    tif_path = REPO_ROOT / "data" / "processed" / "yolo" / "images" / "test" / "OSBS_022_2019.tif"
+    input_geojson = REPO_ROOT / "results" / "gis" / "OSBS_022_2019_verification_priority.geojson"
+    boundary_geojson = REPO_ROOT / "data" / "demo" / "project_boundary_OSBS_022.geojson"
 
-    gis_results_dir = project_root / "results" / "gis"
+    gis_results_dir = REPO_ROOT / "results" / "gis"
     gis_results_dir.mkdir(parents=True, exist_ok=True)
 
     out_route_geojson = gis_results_dir / "OSBS_022_2019_field_route_lcp.geojson"
@@ -36,7 +40,6 @@ def generate_dijkstra_field_route():
         orig_h, orig_w = ds.shape
         rgb_data = ds.read([1, 2, 3])  # Shape: (3, 400, 400)
 
-    # Prepare RGB array for background visualization
     rgb_display = np.transpose(rgb_data, (1, 2, 0))
     if rgb_display.max() > 1.0:
         rgb_display = rgb_display.astype(np.uint8)
@@ -50,7 +53,7 @@ def generate_dijkstra_field_route():
     # 2. Ranger Entry Point at bottom-left corner
     entry_x = bounds.left
     entry_y = bounds.bottom
-    print(f"Ranger Entry Point (Start): UTM ({entry_x:.3f} E, {entry_y:.3f} N)")
+    print(f"Ranger Entry Point (Start): Coordinates ({entry_x:.3f} E, {entry_y:.3f} N)")
 
     # 3. Filter HIGH Priority Trees
     print("\n=== Step 2: Filtering Mandatory HIGH Priority Tree Stops ===")
@@ -60,28 +63,22 @@ def generate_dijkstra_field_route():
 
     # 4. Build Walkability Cost Surface
     print("\n=== Step 3: Generating Walkability Cost Surface ===")
-    # Target grid size: 200x200 (downsampled from 400x400 via 2x2 mean pooling)
     grid_h, grid_w = 200, 200
-    cell_size_x = width_m / grid_w  # 0.20 m
-    cell_size_y = height_m / grid_h  # 0.20 m
-    cell_size = (cell_size_x + cell_size_y) / 2.0  # 0.20 m
+    cell_size_x = width_m / grid_w
+    cell_size_y = height_m / grid_h
+    cell_size = (cell_size_x + cell_size_y) / 2.0
 
-    # Downsample RGB channels by 2x2 block averaging
     rgb_float = rgb_data.astype(np.float64)
     rgb_down = rgb_float.reshape(3, grid_h, 2, grid_w, 2).mean(axis=(2, 4))
     r_ch, g_ch, b_ch = rgb_down[0], rgb_down[1], rgb_down[2]
 
-    # Compute Excess Green Index (ExG): 2*G - R - B
     exg = 2.0 * g_ch - r_ch - b_ch
     p1, p99 = np.percentile(exg, 1), np.percentile(exg, 99)
     exg_norm = np.clip((exg - p1) / (p99 - p1 + 1e-6), 0.0, 1.0)
-
-    # Cost model: 1.0 (open bare ground / easy traversal) to 5.0 (dense canopy / high impediment)
     cost_surface = 1.0 + 4.0 * exg_norm
     print(f"Cost Surface Grid: {grid_w}x{grid_h} cells | Cell Size: {cell_size:.2f} meters")
     print(f"Cost Values:       Min={cost_surface.min():.2f}, Max={cost_surface.max():.2f}, Mean={cost_surface.mean():.2f}")
 
-    # Coordinate mapping functions
     def utm_to_grid(x, y):
         c = int(np.clip((x - bounds.left) / cell_size_x, 0, grid_w - 1))
         r = int(np.clip((bounds.top - y) / cell_size_y, 0, grid_h - 1))
@@ -102,7 +99,6 @@ def generate_dijkstra_field_route():
         for c in range(grid_w):
             u = (r, c)
             c_u = cost_surface[r, c]
-            # 4 forward directions to prevent duplicate edges
             if c + 1 < grid_w:
                 w = cell_size * (c_u + cost_surface[r, c + 1]) / 2.0
                 edges.append((u, (r, c + 1), w))
@@ -124,7 +120,6 @@ def generate_dijkstra_field_route():
     waypoint_nodes = {}
     waypoint_info = {}
 
-    # Entry point snap
     entry_grid = utm_to_grid(entry_x, entry_y)
     waypoint_nodes["ENTRY"] = entry_grid
     waypoint_info["ENTRY"] = {
@@ -134,9 +129,7 @@ def generate_dijkstra_field_route():
         "grid": entry_grid,
         "conf": 1.0,
     }
-    print(f"  [ENTRY] UTM ({entry_x:.2f}, {entry_y:.2f}) -> Grid Cell (r={entry_grid[0]}, c={entry_grid[1]})")
 
-    # Tree stops snap
     for _, row in gdf_high.iterrows():
         node_id = f"T{row['tree_id']}"
         gx = row["geo_easting"]
@@ -152,7 +145,6 @@ def generate_dijkstra_field_route():
             "inside": row["inside_boundary"],
             "reason": row.get("priority_reason", ""),
         }
-        print(f"  [{node_id}]  UTM ({gx:.2f}, {gy:.2f}) -> Grid Cell (r={t_grid[0]}, c={t_grid[1]}) | Conf: {row['confidence']:.1%}")
 
     # 7. Compute Dijkstra Distance Matrix
     print("\n=== Step 6: Computing Dijkstra Least-Cost Distance Matrix ===")
@@ -183,19 +175,14 @@ def generate_dijkstra_field_route():
 
     step_idx = 1
     while unvisited:
-        # Choose closest unvisited waypoint based on least-cost Dijkstra distance
         next_wp = min(unvisited, key=lambda target: dijkstra_matrix[current_wp][target])
         weighted_cost = dijkstra_matrix[current_wp][next_wp]
 
-        # 9. Reconstruct actual cell-by-cell Dijkstra path
         cell_path = nx.dijkstra_path(
             G, waypoint_nodes[current_wp], waypoint_nodes[next_wp], weight="weight"
         )
-
-        # Convert grid path to UTM coordinates
         leg_utm_coords = [grid_to_utm(r, c) for (r, c) in cell_path]
 
-        # Compute physical path distance along the curved trajectory
         leg_phys_dist = 0.0
         for i in range(len(leg_utm_coords) - 1):
             x1, y1 = leg_utm_coords[i]
@@ -205,7 +192,6 @@ def generate_dijkstra_field_route():
         total_physical_dist_m += leg_phys_dist
         total_weighted_cost += weighted_cost
 
-        # Add to stitched continuous route (avoid duplicate joining points)
         if not stitched_utm_coords:
             stitched_utm_coords.extend(leg_utm_coords)
         else:
@@ -229,7 +215,16 @@ def generate_dijkstra_field_route():
         current_wp = next_wp
         step_idx += 1
 
-    # 10. Save Route to GeoJSON (NEW file: OSBS_022_2019_field_route_lcp.geojson)
+    # Dynamic Euclidean straight line baseline calculation
+    straight_line_dist = sum(
+        math.hypot(
+            waypoint_info[route_sequence[i+1]]["utm"][0] - waypoint_info[route_sequence[i]]["utm"][0],
+            waypoint_info[route_sequence[i+1]]["utm"][1] - waypoint_info[route_sequence[i]]["utm"][1]
+        )
+        for i in range(len(route_sequence) - 1)
+    )
+
+    # 10. Save Route to GeoJSON
     print("\n=== Step 8: Saving Least-Cost Route GeoJSON ===")
     route_line_geom = LineString(stitched_utm_coords)
 
@@ -238,33 +233,26 @@ def generate_dijkstra_field_route():
             "route_name": "OSBS_022 Terrain-Aware Dijkstra Least-Cost Path",
             "total_physical_distance_meters": round(total_physical_dist_m, 2),
             "total_least_cost_score": round(total_weighted_cost, 2),
-            "straight_line_baseline_distance_meters": 54.80,
-            "detour_increase_pct": round(((total_physical_dist_m - 54.80) / 54.80) * 100, 2),
+            "straight_line_baseline_distance_meters": round(straight_line_dist, 2),
+            "detour_increase_pct": round(((total_physical_dist_m - straight_line_dist) / straight_line_dist) * 100, 2),
             "stops_count": len(gdf_high),
             "visiting_sequence": " -> ".join([waypoint_info[n]["name"] for n in route_sequence]),
             "cost_surface_model": "Excess Green Index (ExG = 2G - R - B) scaled to [1.0, 5.0]",
             "grid_resolution_meters": round(cell_size, 2),
             "grid_dimensions": f"{grid_w}x{grid_h}",
-            "methodology_notes": (
-                "8-connected grid graph over 200x200 ExG vegetation impedance surface. "
-                "Calculates least-cost path avoiding high-density canopy barriers."
-            ),
         }],
         geometry=[route_line_geom],
         crs=raster_crs,
     )
     gdf_route_lcp.to_file(out_route_geojson, driver="GeoJSON")
-    print(f"Saved LCP GeoJSON to: {out_route_geojson}")
+    print(f"Saved LCP GeoJSON to: {out_route_geojson.name}")
 
-    # 11. Generate Map Visualization (NEW file: OSBS_022_2019_field_route_lcp_map.png)
+    # 11. Generate Map Visualization
     print("\n=== Step 9: Generating High-Resolution LCP Route Map ===")
     fig, ax = plt.subplots(figsize=(11, 11), dpi=150)
-
-    # A. Plot RGB base image
     extent = [bounds.left, bounds.right, bounds.bottom, bounds.top]
     ax.imshow(rgb_display, extent=extent, origin="upper")
 
-    # B. Overlay semi-transparent vegetation cost surface heatmap
     cost_heatmap = ax.imshow(
         cost_surface,
         extent=extent,
@@ -277,14 +265,12 @@ def generate_dijkstra_field_route():
     cbar = plt.colorbar(cost_heatmap, ax=ax, fraction=0.035, pad=0.02)
     cbar.set_label("Walkability Cost (1.0 = Open Path, 5.0 = Dense Canopy)", fontsize=9)
 
-    # C. Plot Project Boundary
     gdf_boundary = gpd.read_file(boundary_geojson)
     gdf_boundary.boundary.plot(
         ax=ax, color="red", linewidth=2.0, linestyle="--", label="Project Corridor"
     )
     gdf_boundary.plot(ax=ax, facecolor="red", alpha=0.10)
 
-    # D. Plot Non-Target Trees (Context)
     gdf_other = gdf_trees[gdf_trees["verification_priority"] != "HIGH"]
     if not gdf_other.empty:
         gdf_other.plot(
@@ -298,19 +284,7 @@ def generate_dijkstra_field_route():
             label=f"Medium/Low Priority (Safe, {len(gdf_other)} trees)",
             zorder=4,
         )
-        for _, r in gdf_other.iterrows():
-            ax.annotate(
-                f"T{r['tree_id']}",
-                (r["geo_easting"], r["geo_northing"]),
-                textcoords="offset points",
-                xytext=(5, 5),
-                color="black",
-                fontsize=8,
-                bbox=dict(boxstyle="round,pad=0.2", fc="white", alpha=0.75, ec="gray"),
-                zorder=5,
-            )
 
-    # E. Plot Winding Dijkstra Route
     xs, ys = zip(*stitched_utm_coords)
     ax.plot(
         xs,
@@ -322,25 +296,6 @@ def generate_dijkstra_field_route():
         zorder=6,
     )
 
-    # F. Add Directional Flow Markers along the winding route
-    n_pts = len(stitched_utm_coords)
-    arrow_indices = [int(n_pts * f) for f in [0.20, 0.45, 0.70, 0.90] if int(n_pts * f) < n_pts - 1]
-    for idx in arrow_indices:
-        x1, y1 = stitched_utm_coords[idx]
-        x2, y2 = stitched_utm_coords[idx + 1]
-        dx = x2 - x1
-        dy = y2 - y1
-        mag = math.hypot(dx, dy)
-        if mag > 1e-5:
-            ax.annotate(
-                "",
-                xy=(x2, y2),
-                xytext=(x1, y1),
-                arrowprops=dict(arrowstyle="->", color="yellow", lw=2.5, mutation_scale=16),
-                zorder=7,
-            )
-
-    # G. Plot Entry Point Marker
     ax.scatter(
         [entry_x],
         [entry_y],
@@ -352,19 +307,7 @@ def generate_dijkstra_field_route():
         label="Ranger Entry Point (Start)",
         zorder=8,
     )
-    ax.annotate(
-        "ENTRY START",
-        (entry_x, entry_y),
-        textcoords="offset points",
-        xytext=(8, 8),
-        color="black",
-        fontweight="bold",
-        fontsize=9,
-        bbox=dict(boxstyle="round,pad=0.3", fc="deepskyblue", alpha=0.92, ec="black"),
-        zorder=9,
-    )
 
-    # H. Plot HIGH Priority Tree Stops
     for stop_num, node_id in enumerate(route_sequence[1:], 1):
         gx, gy = waypoint_info[node_id]["utm"]
         t_id = waypoint_info[node_id]["tree_id"]
@@ -399,40 +342,21 @@ def generate_dijkstra_field_route():
         fontweight="bold",
         pad=12,
     )
-    ax.set_xlabel("UTM Easting (m) [EPSG:32617]", fontsize=10)
-    ax.set_ylabel("UTM Northing (m) [EPSG:32617]", fontsize=10)
+    ax.set_xlabel(f"Easting (m) [{raster_crs}]", fontsize=10)
+    ax.set_ylabel(f"Northing (m) [{raster_crs}]", fontsize=10)
     ax.grid(True, linestyle=":", alpha=0.4, color="white")
     ax.legend(loc="upper left", framealpha=0.9)
     plt.tight_layout()
 
     plt.savefig(out_route_map, dpi=200)
     plt.close()
-    print(f"Saved LCP map to: {out_route_map}")
-
-    # Print Summary Report
-    print("\n" + "=" * 90)
-    print("             VAN-DRISHTI: TERRAIN-AWARE DIJKSTRA FIELD ROUTE REPORT")
-    print("=" * 90)
-    print(f"{'Leg':<5} | {'From':<25} | {'To Destination':<16} | {'Steps':<6} | {'Distance (m)':<13} | {'Cumulative (m)'}")
-    print("-" * 90)
-    for leg in legs_info:
-        print(f"{leg['leg']:<5} | {leg['from_name']:<25} | {leg['to_name']:<16} | {leg['grid_steps']:<6} | {leg['physical_dist_m']:<13.2f} | {leg['cumulative_phys_dist_m']:.2f}")
-    print("=" * 90)
-    print(f"Visiting Order Sequence:       " + " -> ".join([waypoint_info[n]["name"] for n in route_sequence]))
-    print(f"Total Least-Cost Path Length:  {total_physical_dist_m:.2f} meters")
-    print(f"Straight-Line Baseline Length: 54.80 meters")
-    print(f"Detour / Terrain Expansion:    +{total_physical_dist_m - 54.80:.2f} meters (+{((total_physical_dist_m - 54.80) / 54.80) * 100:.1f}%)")
-    print(f"Cost Model:                    Excess Green Index (ExG = 2G - R - B) scaled to [1.0, 5.0]")
-    print(f"Grid Discretization:           200x200 cells ({cell_size:.2f}m x {cell_size:.2f}m per cell)")
-    print("=" * 90)
+    print(f"Saved LCP map to: {out_route_map.name}")
 
     return {
         "sequence": route_sequence,
         "lcp_distance_m": total_physical_dist_m,
-        "straight_line_dist_m": 54.80,
+        "straight_line_dist_m": straight_line_dist,
         "legs": legs_info,
-        "cost_surface_shape": (grid_h, grid_w),
-        "cell_size_m": cell_size,
         "route_geojson": str(out_route_geojson),
         "route_map": str(out_route_map),
     }

@@ -1,0 +1,64 @@
+# VanDrishti Configuration File - TEAK Validation Site (California Sierra Nevada, NEON D17)
+
+site:
+  name: "TEAK_043_2018"
+  description: "Teakettle (TEAK), California Sierra Nevada, NEON Domain D17"
+  rasters:
+    rgb_t2: "data/raw/neon/val/TEAK_043_2018.tif"
+    chm_t2: "data/raw/neon/val/TEAK_043_2018_CHM.tif"
+    rgb_t1: null
+    chm_t1: null
+    dtm: null
+    dsm: null
+
+study_area:
+  size_m: [40.0, 40.0]
+  origin: "auto"
+
+corridor:
+  mode: "auto"
+  auto:
+    bearing_deg: 45.0
+    width_m: 12.0
+    offset_m: 0.0
+
+detection:
+  raw_trees_geojson: "results/gis/TEAK_043_2018_trees.geojson"
+  min_conf: 0.50
+  min_diam_m: 1.0
+  min_sep_m: 1.0
+  chm_min_height: 2.0
+  chm_radius: 1.5
+
+priority:
+  conf_low: 0.86
+  conf_mid: 0.90
+  weights:
+    corridor_impact: 1.0
+    uncertainty: 1.0
+
+routing:
+  w_veg: 4.0
+  max_slope_deg: 45.0
+  grid_res_m: 1.0
+  impedance: "chm"
+  entry_point: "auto"
+  optimization_metric: "time"
+
+degradation:
+  loss_thresh_m: -5.0
+  thinning_thresh_m: -2.0
+  stable_band_m: 2.0
+  edge_grad_max: 2.0
+  min_area_m2: 4.0
+
+health:
+  cell_size_m: 10.0
+  weights:
+    canopy_cover: 0.40
+    structural_diversity: 0.35
+    degradation_penalty: 0.25
+
+outputs:
+  gis_dir: "results/gis"
+  frontend_dir: "frontend/public/data"

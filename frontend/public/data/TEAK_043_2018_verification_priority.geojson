@@ -1,0 +1,564 @@
+{
+  "type": "FeatureCollection",
+  "name": "TEAK_043_2018_verification_priority",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 1,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321035.45,
+        "geo_northing": 4096731.15,
+        "diameter_m": 2.4,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.011256,
+          36.9997114
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 2,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321046.0,
+        "geo_northing": 4096723.6,
+        "diameter_m": 3.4,
+        "inside_boundary": true,
+        "verification_priority": "HIGH",
+        "priority_reason": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)",
+        "priority_rank": 1
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0111357,
+          36.9996454
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 3,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321045.4,
+        "geo_northing": 4096746.45,
+        "diameter_m": 3.75,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0111479,
+          36.9998511
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 4,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321036.25,
+        "geo_northing": 4096721.05,
+        "diameter_m": 4.3,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0112446,
+          36.9996206
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 5,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321072.3,
+        "geo_northing": 4096747.15,
+        "diameter_m": 5.65,
+        "inside_boundary": true,
+        "verification_priority": "HIGH",
+        "priority_reason": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)",
+        "priority_rank": 1
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0108459,
+          36.9998626
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 6,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321052.15,
+        "geo_northing": 4096714.0,
+        "diameter_m": 2.15,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0110643,
+          36.9995601
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 7,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321038.75,
+        "geo_northing": 4096712.9,
+        "diameter_m": 3.35,
+        "inside_boundary": true,
+        "verification_priority": "HIGH",
+        "priority_reason": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)",
+        "priority_rank": 1
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0112146,
+          36.9995476
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 8,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321048.25,
+        "geo_northing": 4096738.5,
+        "diameter_m": 3.15,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.011114,
+          36.9997801
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 9,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321053.85,
+        "geo_northing": 4096716.35,
+        "diameter_m": 2.7,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0110458,
+          36.9995816
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 10,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321049.6,
+        "geo_northing": 4096714.6,
+        "diameter_m": 1.5,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0110931,
+          36.999565
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 11,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321051.05,
+        "geo_northing": 4096719.75,
+        "diameter_m": 2.3,
+        "inside_boundary": true,
+        "verification_priority": "HIGH",
+        "priority_reason": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)",
+        "priority_rank": 1
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0110781,
+          36.9996117
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 12,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321070.8,
+        "geo_northing": 4096712.8,
+        "diameter_m": 2.4,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0108546,
+          36.9995528
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 13,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321068.45,
+        "geo_northing": 4096712.6,
+        "diameter_m": 2.65,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0108809,
+          36.9995506
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 14,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321044.9,
+        "geo_northing": 4096737.95,
+        "diameter_m": 3.45,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0111515,
+          36.9997745
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 15,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321049.35,
+        "geo_northing": 4096749.4,
+        "diameter_m": 4.35,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0111042,
+          36.9998785
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 16,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321063.3,
+        "geo_northing": 4096738.55,
+        "diameter_m": 3.75,
+        "inside_boundary": true,
+        "verification_priority": "HIGH",
+        "priority_reason": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)",
+        "priority_rank": 1
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0109449,
+          36.9997834
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 17,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321047.3,
+        "geo_northing": 4096713.7,
+        "diameter_m": 2.9,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0111187,
+          36.9995565
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 18,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321043.35,
+        "geo_northing": 4096717.9,
+        "diameter_m": 2.85,
+        "inside_boundary": true,
+        "verification_priority": "HIGH",
+        "priority_reason": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)",
+        "priority_rank": 1
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0111641,
+          36.9995935
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 19,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321040.5,
+        "geo_northing": 4096732.0,
+        "diameter_m": 5.3,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0111995,
+          36.99972
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 20,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321038.35,
+        "geo_northing": 4096740.35,
+        "diameter_m": 4.0,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0112256,
+          36.9997948
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 21,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321072.8,
+        "geo_northing": 4096740.85,
+        "diameter_m": 3.25,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0108388,
+          36.9998059
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 22,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321057.0,
+        "geo_northing": 4096737.75,
+        "diameter_m": 2.35,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0110155,
+          36.999775
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 23,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321053.55,
+        "geo_northing": 4096735.35,
+        "diameter_m": 3.2,
+        "inside_boundary": false,
+        "verification_priority": "MEDIUM",
+        "priority_reason": "Outside corridor with moderate confidence [Conf: 85.0%]",
+        "priority_rank": 2
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.0110537,
+          36.9997527
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "tree_id": 24,
+        "confidence": 0.85,
+        "score": 0.85,
+        "label": "Tree",
+        "geo_easting": 321057.7,
+        "geo_northing": 4096730.75,
+        "diameter_m": 3.65,
+        "inside_boundary": true,
+        "verification_priority": "HIGH",
+        "priority_reason": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)",
+        "priority_rank": 1
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -119.011006,
+          36.999712
+        ]
+      }
+    }
+  ]
+}

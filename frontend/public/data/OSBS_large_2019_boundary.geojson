@@ -11,7 +11,7 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "OSBS Large 2019 Infrastructure Corridor",
+        "name": "OSBS_large_2019 Infrastructure Corridor",
         "area_sq_m": 15000.0,
         "tile_coverage_pct": 24.0
       },

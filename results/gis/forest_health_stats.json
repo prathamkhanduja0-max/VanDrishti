@@ -1,30 +1,18 @@
 {
-  "cell_size_m": 25,
-  "grid": [
+  "cell_size_m": 25.0,
+  "grid_shape": [
     10,
     10
   ],
-  "n_cells": 100,
   "weights": {
     "cover": 0.3,
     "diversity": 0.3,
     "degradation": 0.4
   },
-  "score_min": 19.1,
-  "score_median": 64.6,
-  "score_max": 96.9,
-  "grade_counts": {
-    "A": 7,
-    "B": 43,
-    "C": 25,
-    "D": 25
-  },
-  "component_means": {
-    "cover_frac": 0.729,
-    "diversity_m": 3.18,
-    "loss_density": 0.00398
-  },
-  "weight_sensitivity_spearman": {
+  "score_mean": 60.34,
+  "score_std": 15.47,
+  "score_median": 64.57,
+  "sensitivity": {
     "equal_weights": 0.987,
     "cover_only": 0.464,
     "diversity_only": 0.192,
