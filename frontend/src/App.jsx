@@ -6,7 +6,9 @@ import {
   Popup,
   Marker,
   Pane,
-  useMap
+  Polyline,
+  useMap,
+  useMapEvents
 } from 'react-leaflet';
 import L from 'leaflet';
 import {
@@ -38,8 +40,12 @@ import {
   AlertCircle,
   HardDrive,
   FileCheck,
-  ArrowUpRight
+  ArrowUpRight,
+  Route,
+  RotateCcw,
+  X
 } from 'lucide-react';
+import { computePointToPointPath } from './utils/dijkstra';
 
 // Custom Marker Icons for Route Stops and Entry Point
 const createStopIcon = (number, bg = '#ef4444') => {
@@ -66,6 +72,33 @@ const createStopIcon = (number, bg = '#ef4444') => {
     `,
     iconSize: [26, 26],
     iconAnchor: [13, 13],
+  });
+};
+
+const createP2PIcon = (label, bg = '#10b981') => {
+  return L.divIcon({
+    className: 'custom-p2p-icon',
+    html: `
+      <div style="
+        background-color: ${bg};
+        color: white;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 12.5px;
+        border: 2.5px solid white;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.9);
+        transform: translate(-14px, -14px);
+      ">
+        ${label}
+      </div>
+    `,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
   });
 };
 
@@ -122,6 +155,18 @@ function MapController({ center, zoom, onZoomChange }) {
   return null;
 }
 
+// Map Click Listener for Interactive Point-to-Point Routing
+function MapClickHandler({ p2pEnabled, onMapClick }) {
+  useMapEvents({
+    click(e) {
+      if (p2pEnabled && onMapClick) {
+        onMapClick(e.latlng);
+      }
+    },
+  });
+  return null;
+}
+
 export default function App() {
   const [activeNav, setActiveNav] = useState('Overview');
   const [basemap, setBasemap] = useState('satellite'); // 'satellite' | 'dark'
@@ -139,6 +184,17 @@ export default function App() {
   const [healthGridData, setHealthGridData] = useState(null);
   const [degradationData, setDegradationData] = useState(null);
   const [fireHotspotsData, setFireHotspotsData] = useState(null);
+
+  // Cost Surfaces for Interactive Dijkstra
+  const [osbsCostSurface, setOsbsCostSurface] = useState(null);
+  const [teakCostSurface, setTeakCostSurface] = useState(null);
+
+  // Point-to-Point Interactive Routing State
+  const [p2pEnabled, setP2pEnabled] = useState(false);
+  const [p2pStart, setP2pStart] = useState(null); // [lat, lon]
+  const [p2pEnd, setP2pEnd] = useState(null);     // [lat, lon]
+  const [p2pRouteResult, setP2pRouteResult] = useState(null);
+  const [p2pError, setP2pError] = useState(null);
 
   // Uploaded Assessment State (Analyze Your Forest)
   const [selectedUploadPreset, setSelectedUploadPreset] = useState('teak');
@@ -174,7 +230,7 @@ export default function App() {
     setLayers((prev) => ({ ...prev, [layerName]: !prev[layerName] }));
   };
 
-  // Fetch Core GeoJSON Layers
+  // Fetch Core GeoJSON Layers and Cost Surfaces
   useEffect(() => {
     async function loadData() {
       try {
@@ -188,7 +244,9 @@ export default function App() {
           hgRes,
           degRes,
           fRes,
-          teakAssRes
+          teakAssRes,
+          osbsCostRes,
+          teakCostRes
         ] = await Promise.all([
           fetch('/data/OSBS_large_2019_boundary.geojson').then((r) => {
             if (!r.ok) throw new Error('Failed to load boundary geojson');
@@ -226,6 +284,14 @@ export default function App() {
             if (!r.ok) return null;
             return r.json();
           }),
+          fetch('/data/osbs_cost_surface.json').then((r) => {
+            if (!r.ok) return null;
+            return r.json();
+          }),
+          fetch('/data/teak_cost_surface.json').then((r) => {
+            if (!r.ok) return null;
+            return r.json();
+          }),
         ]);
 
         setBoundaryData(bRes);
@@ -237,6 +303,8 @@ export default function App() {
         setDegradationData(degRes);
         setFireHotspotsData(fRes);
         if (teakAssRes) setUploadedAssessment(teakAssRes);
+        if (osbsCostRes) setOsbsCostSurface(osbsCostRes);
+        if (teakCostRes) setTeakCostSurface(teakCostRes);
         setLoading(false);
       } catch (err) {
         console.error('Error loading GeoJSON layers:', err);
@@ -336,10 +404,54 @@ export default function App() {
     }
   }, [activeNav]);
 
+  // Determine Active Cost Surface
+  const activeCostSurface = useMemo(() => {
+    if (activeNav === 'Analyze Your Forest' && selectedUploadPreset === 'teak') {
+      return teakCostSurface;
+    }
+    return osbsCostSurface;
+  }, [activeNav, selectedUploadPreset, osbsCostSurface, teakCostSurface]);
+
+  // Handle Interactive Map Clicks for Point-to-Point Dijkstra Routing
+  const handleMapPointClick = useCallback((latlng) => {
+    if (!p2pEnabled) return;
+    const pt = [latlng.lat, latlng.lng];
+
+    if (!p2pStart || (p2pStart && p2pEnd)) {
+      // First click -> Start Point A
+      setP2pStart(pt);
+      setP2pEnd(null);
+      setP2pRouteResult(null);
+      setP2pError(null);
+    } else if (p2pStart && !p2pEnd) {
+      // Second click -> End Point B + Execute Dijkstra!
+      setP2pEnd(pt);
+      try {
+        if (!activeCostSurface) {
+          throw new Error('Cost surface data not yet loaded for this area.');
+        }
+        const result = computePointToPointPath(activeCostSurface, p2pStart, pt);
+        setP2pRouteResult(result);
+        setP2pError(null);
+      } catch (err) {
+        console.error('P2P Dijkstra error:', err);
+        setP2pError(err.message || 'Routing failed between selected points.');
+      }
+    }
+  }, [p2pEnabled, p2pStart, p2pEnd, activeCostSurface]);
+
+  const handleResetP2P = () => {
+    setP2pStart(null);
+    setP2pEnd(null);
+    setP2pRouteResult(null);
+    setP2pError(null);
+  };
+
   // Handle Preset Selection in "Analyze Your Forest"
   const handleSelectUploadPreset = async (preset) => {
     setSelectedUploadPreset(preset);
     setUploadLoading(true);
+    handleResetP2P();
     try {
       const url = preset === 'teak' ? '/data/teak_assessment.json' : '/data/osbs_full_assessment.json';
       const res = await fetch(url);
@@ -512,7 +624,12 @@ export default function App() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveNav(item.id)}
+                  onClick={() => {
+                    setActiveNav(item.id);
+                    if (item.id !== 'Analyze Your Forest') {
+                      handleResetP2P();
+                    }
+                  }}
                   className={`nav-btn ${isActive ? 'active' : ''}`}
                 >
                   <Icon size={16} />
@@ -531,11 +648,11 @@ export default function App() {
               <span className="status-dot"></span> System Operational
             </span>
             <span style={{ fontSize: '9px', background: '#052e16', padding: '1px 5px', borderRadius: '3px', border: '1px solid #10b981', color: '#6ee7b7' }}>
-              v2.1 Full
+              v2.2 Dijkstra
             </span>
           </div>
           <div>CRS: Dynamic Auto-Detection</div>
-          <div>Tobler Terrain TSP • CHM Diff • VIIRS</div>
+          <div>Tobler Terrain TSP • CHM Diff • Dijkstra</div>
         </div>
       </aside>
 
@@ -556,6 +673,19 @@ export default function App() {
           </div>
 
           <div className="topbar-actions">
+            {/* Interactive Point-to-Point Dijkstra Toggle */}
+            <button
+              onClick={() => {
+                setP2pEnabled(!p2pEnabled);
+                if (p2pEnabled) handleResetP2P();
+              }}
+              className={`p2p-toggle-btn ${p2pEnabled ? 'active' : ''}`}
+              title="Click two points on the map to compute real-time least-cost path"
+            >
+              <Route size={13} />
+              <span>{p2pEnabled ? 'P2P Router Active' : 'P2P Dijkstra Mode'}</span>
+            </button>
+
             <button onClick={handleCenterStudyArea} className="action-icon-btn" title="Center on 250m Study Area">
               <Crosshair size={13} />
               <span>Center View</span>
@@ -782,18 +912,92 @@ export default function App() {
 
               {/* Right Panel: Live Map for Uploaded Raster Results */}
               <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+                {/* P2P HUD OVERLAY ON UPLOAD MAP */}
+                {p2pEnabled && (
+                  <div className="p2p-hud-overlay">
+                    <div className="p2p-hud-header">
+                      <div className="p2p-hud-title">
+                        <Route size={16} />
+                        <span>Interactive Dijkstra</span>
+                      </div>
+                      <div className="term-badge-group">
+                        <span className={`term-badge ${activeCostSurface?.active_terms?.includes('ExG') ? 'active' : 'inactive'}`}>ExG</span>
+                        <span className={`term-badge ${activeCostSurface?.active_terms?.includes('CHM') ? 'active' : 'inactive'}`}>CHM</span>
+                        <span className={`term-badge ${activeCostSurface?.active_terms?.includes('Slope') ? 'active' : 'inactive'}`}>Slope</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span className="p2p-mode-label">
+                        {p2pRouteResult?.mode_label || activeCostSurface?.mode_label || 'Cost Surface Active'}
+                      </span>
+                      {p2pRouteResult && (
+                        <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 600 }}>● Path Solved</span>
+                      )}
+                    </div>
+
+                    {/* Step-by-Step Instruction */}
+                    <div className="p2p-instruction">
+                      {!p2pStart && '1. Click anywhere on the map to set Start Point A.'}
+                      {p2pStart && !p2pEnd && '2. Click your target destination to run Dijkstra.'}
+                      {p2pRouteResult && 'Least-cost Dijkstra path successfully generated across active impedance model.'}
+                      {p2pError && <span style={{ color: '#f87171' }}>{p2pError}</span>}
+                    </div>
+
+                    {/* Metric Outputs */}
+                    {p2pRouteResult && (
+                      <div className="p2p-metrics-grid">
+                        <div className="p2p-metric-item">
+                          <span className="p2p-metric-label">Path Length</span>
+                          <span className="p2p-metric-val">
+                            {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}
+                          </span>
+                        </div>
+                        <div className="p2p-metric-item">
+                          <span className="p2p-metric-label">Estimated Time</span>
+                          <span className="p2p-metric-val">
+                            {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                          </span>
+                        </div>
+                        {!p2pRouteResult.is_projected && (
+                          <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
+                            <span className="p2p-metric-label">Pixel Distance</span>
+                            <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
+                              {p2pRouteResult.pixel_distance} px (Unprojected)
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="p2p-actions">
+                      <button onClick={handleResetP2P} className="p2p-action-btn">
+                        <RotateCcw size={11} style={{ display: 'inline', marginRight: '4px' }} />
+                        Reset Points
+                      </button>
+                      <button onClick={() => { setP2pEnabled(false); handleResetP2P(); }} className="p2p-action-btn">
+                        <X size={11} style={{ display: 'inline', marginRight: '4px' }} />
+                        Exit P2P
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <MapContainer
                   center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
                   zoom={selectedUploadPreset === 'teak' ? 19 : 17}
                   minZoom={7}
                   maxZoom={22}
                   scrollWheelZoom={true}
-                  style={{ height: '100%', width: '100%' }}
+                  style={{ height: '100%', width: '100%', cursor: p2pEnabled ? 'crosshair' : 'default' }}
                 >
                   <MapController
                     center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
                     zoom={selectedUploadPreset === 'teak' ? 19 : 17}
                   />
+
+                  {/* Click Listener for P2P Dijkstra */}
+                  <MapClickHandler p2pEnabled={p2pEnabled} onMapClick={handleMapPointClick} />
 
                   {basemap === 'satellite' ? (
                     <TileLayer
@@ -810,7 +1014,7 @@ export default function App() {
                     />
                   )}
 
-                  {/* Render Whatever DID run on this dataset */}
+                  {/* Render Detected Crowns */}
                   {uploadedAssessment?.detection_results?.geojson && (
                     <GeoJSON
                       key={`upload-trees-${selectedUploadPreset}`}
@@ -836,6 +1040,52 @@ export default function App() {
                         `);
                       }}
                     />
+                  )}
+
+                  {/* P2P Dijkstra Start Marker (A) */}
+                  {p2pStart && (
+                    <Marker position={p2pStart} icon={createP2PIcon('A', '#10b981')} zIndexOffset={1100}>
+                      <Popup>
+                        <div style={{ fontSize: '12px' }}>
+                          <b style={{ color: '#10b981' }}>Point A (Start)</b><br />
+                          {p2pStart[0].toFixed(5)}° N, {p2pStart[1].toFixed(5)}° W
+                        </div>
+                      </Popup>
+                    </Marker>
+                  )}
+
+                  {/* P2P Dijkstra End Marker (B) */}
+                  {p2pEnd && (
+                    <Marker position={p2pEnd} icon={createP2PIcon('B', '#ef4444')} zIndexOffset={1100}>
+                      <Popup>
+                        <div style={{ fontSize: '12px' }}>
+                          <b style={{ color: '#ef4444' }}>Point B (Destination)</b><br />
+                          {p2pEnd[0].toFixed(5)}° N, {p2pEnd[1].toFixed(5)}° W
+                        </div>
+                      </Popup>
+                    </Marker>
+                  )}
+
+                  {/* P2P Dijkstra Result Polyline */}
+                  {p2pRouteResult?.pathCoordinates && (
+                    <Polyline
+                      positions={p2pRouteResult.pathCoordinates}
+                      pathOptions={{
+                        color: '#f59e0b',
+                        weight: 5.5,
+                        opacity: 0.95,
+                        dashArray: '3, 6',
+                      }}
+                    >
+                      <Popup>
+                        <div style={{ fontSize: '12px' }}>
+                          <b style={{ color: '#f59e0b', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
+                          <b>Model:</b> {p2pRouteResult.mode_label}<br />
+                          <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
+                          <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                        </div>
+                      </Popup>
+                    </Polyline>
                   )}
                 </MapContainer>
               </div>
@@ -886,6 +1136,77 @@ export default function App() {
                 </div>
               )}
 
+              {/* P2P HUD OVERLAY ON MAIN MAP */}
+              {p2pEnabled && (
+                <div className="p2p-hud-overlay">
+                  <div className="p2p-hud-header">
+                    <div className="p2p-hud-title">
+                      <Route size={16} />
+                      <span>Point-to-Point Dijkstra</span>
+                    </div>
+                    <div className="term-badge-group">
+                      <span className={`term-badge ${activeCostSurface?.active_terms?.includes('ExG') ? 'active' : 'inactive'}`}>ExG</span>
+                      <span className={`term-badge ${activeCostSurface?.active_terms?.includes('CHM') ? 'active' : 'inactive'}`}>CHM</span>
+                      <span className={`term-badge ${activeCostSurface?.active_terms?.includes('Slope') ? 'active' : 'inactive'}`}>Slope</span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span className="p2p-mode-label">
+                      {p2pRouteResult?.mode_label || activeCostSurface?.mode_label || 'terrain-aware'}
+                    </span>
+                    {p2pRouteResult && (
+                      <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 600 }}>● Path Solved</span>
+                    )}
+                  </div>
+
+                  {/* Step-by-Step Instruction */}
+                  <div className="p2p-instruction">
+                    {!p2pStart && '1. Click anywhere on the map to set Start Point A.'}
+                    {p2pStart && !p2pEnd && '2. Click your target destination to run Dijkstra.'}
+                    {p2pRouteResult && 'Least-cost Dijkstra path successfully generated across terrain & canopy cost surface.'}
+                    {p2pError && <span style={{ color: '#f87171' }}>{p2pError}</span>}
+                  </div>
+
+                  {/* Metric Outputs */}
+                  {p2pRouteResult && (
+                    <div className="p2p-metrics-grid">
+                      <div className="p2p-metric-item">
+                        <span className="p2p-metric-label">Path Length</span>
+                        <span className="p2p-metric-val">
+                          {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}
+                        </span>
+                      </div>
+                      <div className="p2p-metric-item">
+                        <span className="p2p-metric-label">Estimated Time</span>
+                        <span className="p2p-metric-val">
+                          {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                        </span>
+                      </div>
+                      {!p2pRouteResult.is_projected && (
+                        <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
+                          <span className="p2p-metric-label">Pixel Distance</span>
+                          <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
+                            {p2pRouteResult.pixel_distance} px (Unprojected)
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="p2p-actions">
+                    <button onClick={handleResetP2P} className="p2p-action-btn">
+                      <RotateCcw size={11} style={{ display: 'inline', marginRight: '4px' }} />
+                      Reset Points
+                    </button>
+                    <button onClick={() => { setP2pEnabled(false); handleResetP2P(); }} className="p2p-action-btn">
+                      <X size={11} style={{ display: 'inline', marginRight: '4px' }} />
+                      Exit P2P
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Map Zoom Level Notice Overlay (when zoom < 17 and trees active) */}
               {layers.trees && mapZoomLevel < 17 && (
                 <div style={{
@@ -918,9 +1239,12 @@ export default function App() {
                 minZoom={7}
                 maxZoom={22}
                 scrollWheelZoom={true}
-                style={{ height: '100%', width: '100%' }}
+                style={{ height: '100%', width: '100%', cursor: p2pEnabled ? 'crosshair' : 'default' }}
               >
                 <MapController center={currentCenter} zoom={currentZoom} onZoomChange={handleZoomChange} />
+
+                {/* Click Listener for P2P Dijkstra */}
+                <MapClickHandler p2pEnabled={p2pEnabled} onMapClick={handleMapPointClick} />
 
                 {/* Basemap Tiles */}
                 {basemap === 'satellite' ? (
@@ -1229,6 +1553,50 @@ export default function App() {
                       layer.on('click', () => setSelectedFeature({ type: 'fire', properties: props }));
                     }}
                   />
+                )}
+
+                {/* 10. INTERACTIVE POINT-TO-POINT DIJKSTRA START & END MARKERS + PATH */}
+                {p2pStart && (
+                  <Marker position={p2pStart} icon={createP2PIcon('A', '#10b981')} zIndexOffset={1100}>
+                    <Popup>
+                      <div style={{ fontSize: '12px' }}>
+                        <b style={{ color: '#10b981' }}>Point A (Start)</b><br />
+                        {p2pStart[0].toFixed(5)}° N, {p2pStart[1].toFixed(5)}° W
+                      </div>
+                    </Popup>
+                  </Marker>
+                )}
+
+                {p2pEnd && (
+                  <Marker position={p2pEnd} icon={createP2PIcon('B', '#ef4444')} zIndexOffset={1100}>
+                    <Popup>
+                      <div style={{ fontSize: '12px' }}>
+                        <b style={{ color: '#ef4444' }}>Point B (Destination)</b><br />
+                        {p2pEnd[0].toFixed(5)}° N, {p2pEnd[1].toFixed(5)}° W
+                      </div>
+                    </Popup>
+                  </Marker>
+                )}
+
+                {p2pRouteResult?.pathCoordinates && (
+                  <Polyline
+                    positions={p2pRouteResult.pathCoordinates}
+                    pathOptions={{
+                      color: '#f59e0b',
+                      weight: 5.5,
+                      opacity: 0.95,
+                      dashArray: '3, 6',
+                    }}
+                  >
+                    <Popup>
+                      <div style={{ fontSize: '12px' }}>
+                        <b style={{ color: '#f59e0b', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
+                        <b>Model:</b> {p2pRouteResult.mode_label}<br />
+                        <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
+                        <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                      </div>
+                    </Popup>
+                  </Polyline>
                 )}
               </MapContainer>
 
