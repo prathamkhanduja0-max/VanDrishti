@@ -53,7 +53,7 @@ def reproject_geojson(in_path: Path, out_path: Path, transformer: Transformer):
 
 
 def main():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     gis_dir = project_root / "results" / "gis"
     public_data_dir = project_root / "frontend" / "public" / "data"
     public_data_dir.mkdir(parents=True, exist_ok=True)

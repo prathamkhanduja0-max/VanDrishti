@@ -17,7 +17,7 @@ from shapely.geometry import LineString, Point
 
 
 def generate_dijkstra_field_route():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     tif_path = project_root / "data" / "processed" / "yolo" / "images" / "test" / "OSBS_022_2019.tif"
     input_geojson = project_root / "results" / "gis" / "OSBS_022_2019_verification_priority.geojson"
     boundary_geojson = project_root / "data" / "demo" / "project_boundary_OSBS_022.geojson"

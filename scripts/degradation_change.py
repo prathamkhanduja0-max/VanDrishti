@@ -17,7 +17,7 @@ from shapely.geometry import shape
 
 
 def run_degradation_change():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     gis_results_dir = project_root / "results" / "gis"
     gis_results_dir.mkdir(parents=True, exist_ok=True)
 
@@ -26,7 +26,7 @@ def run_degradation_change():
     if not path_2019.exists():
         path_2019 = project_root / "data" / "processed" / "yolo" / "images" / "test" / "OSBS_022_2019.tif"
 
-    zip_path = Path("C:/Users/naiti/Downloads/NEON_images-camera-ortho-mosaic.zip")
+    zip_path = project_root / "data" / "raw" / "NEON_images-camera-ortho-mosaic.zip"
     zip_vsi_path = (
         f"/vsizip/{zip_path.as_posix()}/"
         "NEON_images-camera-ortho-mosaic/"

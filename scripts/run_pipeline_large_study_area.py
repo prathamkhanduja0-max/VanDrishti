@@ -15,7 +15,7 @@ from shapely.geometry import Polygon, LineString, Point
 
 
 def run_full_pipeline():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     tif_path = project_root / "data" / "raw" / "neon" / "large" / "OSBS_large_2019.tif"
     raw_trees_geojson = project_root / "results" / "gis" / "OSBS_large_2019_trees.geojson"
     gis_dir = project_root / "results" / "gis"
