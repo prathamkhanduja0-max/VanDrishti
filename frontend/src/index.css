@@ -945,3 +945,163 @@ html, body {
   line-height: 1.35;
 }
 
+/* ==========================================================================
+   INTERACTIVE POINT-TO-POINT DIJKSTRA ROUTING HUD & BADGES
+   ========================================================================== */
+.p2p-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #071a12;
+  border: 1px solid #10b981;
+  color: #6ee7b7;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.p2p-toggle-btn:hover {
+  background-color: #10b98122;
+}
+
+.p2p-toggle-btn.active {
+  background-color: #10b981;
+  color: #042f1d;
+  font-weight: 700;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.4);
+}
+
+.p2p-hud-overlay {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 850;
+  background: rgba(10, 23, 17, 0.95);
+  border: 1px solid #1b4d35;
+  border-radius: 10px;
+  padding: 14px 16px;
+  max-width: 380px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.p2p-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #143624;
+  padding-bottom: 8px;
+}
+
+.p2p-hud-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6ee7b7;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.term-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.term-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.3px;
+}
+
+.term-badge.active {
+  background-color: #064e3b;
+  border: 1px solid #10b981;
+  color: #a7f3d0;
+}
+
+.term-badge.inactive {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  color: #64748b;
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.p2p-mode-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #38bdf8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.p2p-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background-color: #07130d;
+  border: 1px solid #143624;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.p2p-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.p2p-metric-label {
+  font-size: 9.5px;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.p2p-metric-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.p2p-instruction {
+  font-size: 11px;
+  color: #cbd5e1;
+  line-height: 1.35;
+}
+
+.p2p-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.p2p-action-btn {
+  flex: 1;
+  background-color: #0f241a;
+  border: 1px solid #1b4d35;
+  color: #cbd5e1;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.p2p-action-btn:hover {
+  background-color: #143624;
+  color: #ffffff;
+}
+
+
