@@ -1,0 +1,68 @@
+{
+  "raw_count": 1998,
+  "valid_count": 1979,
+  "dropped_count": 19,
+  "retention_pct": 99.05,
+  "height_stats_all": {
+    "mean_m": 12.76,
+    "median_m": 12.84,
+    "p5_m": 7.13,
+    "p95_m": 18.26
+  },
+  "params": {
+    "min_height_m": 2.0,
+    "search_radius_m": 1.5
+  },
+  "confidence_calibration": [
+    {
+      "conf_range": [
+        0.111,
+        0.319
+      ],
+      "n": 400,
+      "height_mean_m": 11.93,
+      "height_median_m": 12.56,
+      "pct_under_2m": 3.5
+    },
+    {
+      "conf_range": [
+        0.319,
+        0.401
+      ],
+      "n": 399,
+      "height_mean_m": 12.57,
+      "height_median_m": 12.6,
+      "pct_under_2m": 0.8
+    },
+    {
+      "conf_range": [
+        0.401,
+        0.475
+      ],
+      "n": 400,
+      "height_mean_m": 12.45,
+      "height_median_m": 12.27,
+      "pct_under_2m": 0.0
+    },
+    {
+      "conf_range": [
+        0.475,
+        0.575
+      ],
+      "n": 399,
+      "height_mean_m": 12.98,
+      "height_median_m": 12.81,
+      "pct_under_2m": 0.3
+    },
+    {
+      "conf_range": [
+        0.575,
+        0.887
+      ],
+      "n": 400,
+      "height_mean_m": 13.88,
+      "height_median_m": 13.93,
+      "pct_under_2m": 0.2
+    }
+  ]
+}

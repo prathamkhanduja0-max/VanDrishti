@@ -117,7 +117,7 @@ def convert_voc_to_yolo(raw_dir: Path, processed_dir: Path, splits: list[str] | 
 
 
 def main():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     raw_dir = project_root / "data" / "raw" / "neon"
     processed_dir = project_root / "data" / "processed" / "yolo"
 

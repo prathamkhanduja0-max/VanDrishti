@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw
 
 
 def filter_predictions(threshold: float = 0.4):
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     img_dir = project_root / "data" / "processed" / "yolo" / "images" / "test"
     results_dir = project_root / "results" / "deepforest"
 

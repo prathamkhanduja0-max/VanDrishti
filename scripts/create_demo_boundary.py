@@ -12,7 +12,7 @@ from shapely.geometry import box
 
 
 def create_demo_boundary():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     tif_path = project_root / "data" / "processed" / "yolo" / "images" / "test" / "OSBS_022_2019.tif"
     demo_dir = project_root / "data" / "demo"
     demo_dir.mkdir(parents=True, exist_ok=True)

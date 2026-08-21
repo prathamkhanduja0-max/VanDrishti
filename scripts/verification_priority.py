@@ -40,7 +40,7 @@ def determine_priority(row):
 
 
 def run_verification_priority():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     input_geojson = project_root / "results" / "gis" / "OSBS_022_2019_trees_with_boundary_status.geojson"
     out_geojson = project_root / "results" / "gis" / "OSBS_022_2019_verification_priority.geojson"
 

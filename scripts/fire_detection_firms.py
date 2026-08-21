@@ -42,8 +42,10 @@ PRESETS = {
     },
 }
 
-# Read MAP_KEY from environment or default to user key
-MAP_KEY = os.environ.get("FIRMS_MAP_KEY", "").strip() or "26ede22c03ee0e6e3e11bccfaf7a7b9a"
+# Read MAP_KEY from environment
+MAP_KEY = os.environ.get("FIRMS_MAP_KEY", "").strip()
+if not MAP_KEY:
+    raise SystemExit("Set FIRMS_MAP_KEY environment variable")
 
 
 def fetch_firms_hotspots(config, map_key):
@@ -94,7 +96,7 @@ def run_fire_detection(preset_key=ACTIVE_PRESET):
     west, south, east, north = cfg["bbox"]
     query_date_str = cfg["query_date"] if cfg["query_date"] else "Latest (Live Rolling Window)"
 
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     results_dir = project_root / "results" / "gis"
     results_dir.mkdir(parents=True, exist_ok=True)
 

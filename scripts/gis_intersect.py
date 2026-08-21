@@ -16,7 +16,7 @@ from shapely.geometry import Point
 
 
 def perform_gis_intersection():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     tif_path = project_root / "data" / "processed" / "yolo" / "images" / "test" / "OSBS_022_2019.tif"
     preds_csv = project_root / "results" / "deepforest" / "OSBS_022_2019_preds_filtered.csv"
     boundary_geojson = project_root / "data" / "demo" / "project_boundary_OSBS_022.geojson"
@@ -193,8 +193,8 @@ def perform_gis_intersection():
         fontweight="bold",
         pad=12,
     )
-    ax.set_xlabel("UTM Easting (m) [EPSG:32617]", fontsize=10)
-    ax.set_ylabel("UTM Northing (m) [EPSG:32617]", fontsize=10)
+    ax.set_xlabel(f"UTM Easting (m) [{raster_crs}]", fontsize=10)
+    ax.set_ylabel(f"UTM Northing (m) [{raster_crs}]", fontsize=10)
     ax.grid(True, linestyle=":", alpha=0.4, color="white")
     ax.legend(loc="upper left", framealpha=0.9)
     plt.tight_layout()

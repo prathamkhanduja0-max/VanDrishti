@@ -14,7 +14,7 @@ import rasterio
 
 
 def generate_canopy_route_clean():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     tif_path = project_root / "data" / "raw" / "neon" / "large" / "OSBS_large_2019.tif"
     route_geojson = project_root / "results" / "gis" / "OSBS_large_2019_field_route_lcp.geojson"
     prio_geojson = project_root / "results" / "gis" / "OSBS_large_2019_verification_priority.geojson"
@@ -150,8 +150,8 @@ def generate_canopy_route_clean():
         )
 
     ax1.set_title("Panel 1: High-Resolution RGB Orthomosaic\nField Verification Route & 13 Priority Stops", fontsize=13, fontweight="bold", pad=12)
-    ax1.set_xlabel("UTM Easting (m) [EPSG:32617]", fontsize=10)
-    ax1.set_ylabel("UTM Northing (m) [EPSG:32617]", fontsize=10)
+    ax1.set_xlabel(f"UTM Easting (m) [{crs}]", fontsize=10)
+    ax1.set_ylabel(f"UTM Northing (m) [{crs}]", fontsize=10)
     ax1.set_xlim(bounds.left, bounds.right)
     ax1.set_ylim(bounds.bottom, bounds.top)
     ax1.grid(True, linestyle=":", alpha=0.35, color="white")
@@ -209,8 +209,8 @@ def generate_canopy_route_clean():
         fontweight="bold",
         pad=12
     )
-    ax2.set_xlabel("UTM Easting (m) [EPSG:32617]", fontsize=10)
-    ax2.set_ylabel("UTM Northing (m) [EPSG:32617]", fontsize=10)
+    ax2.set_xlabel(f"UTM Easting (m) [{crs}]", fontsize=10)
+    ax2.set_ylabel(f"UTM Northing (m) [{crs}]", fontsize=10)
     ax2.set_xlim(bounds.left, bounds.right)
     ax2.set_ylim(bounds.bottom, bounds.top)
     ax2.grid(True, linestyle=":", alpha=0.35, color="gray")

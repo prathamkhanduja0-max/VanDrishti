@@ -14,8 +14,11 @@ import numpy as np
 from PIL import Image
 
 
+import rasterio
+
+
 def run():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     tif_path = project_root / "data" / "raw" / "neon" / "large" / "OSBS_large_2019.tif"
     route_geojson_path = project_root / "results" / "gis" / "OSBS_large_2019_field_route_lcp_optimized.geojson"
     prio_geojson_path = project_root / "results" / "gis" / "OSBS_large_2019_verification_priority.geojson"
@@ -26,13 +29,15 @@ def run():
 
     # 1. Load GeoTIFF raster
     print("Loading base raster GeoTIFF...")
+    with rasterio.open(tif_path) as src:
+        bounds = src.bounds
+        crs = src.crs
+        left, right = bounds.left, bounds.right
+        bottom, top = bounds.bottom, bounds.top
+        extent = [left, right, bottom, top]
+
     img = Image.open(tif_path)
     rgb = np.array(img.convert("RGB"))  # Shape: (2500, 2500, 3)
-
-    # Geographic bounds (250m x 250m, EPSG:32617)
-    left, right = 407700.0, 407950.0
-    bottom, top = 3283750.0, 3284000.0
-    extent = [left, right, bottom, top]
 
     r = rgb[:, :, 0].astype(np.float32)
     g = rgb[:, :, 1].astype(np.float32)
@@ -108,8 +113,8 @@ def run():
         f"Canopy Mask (Black: Canopy {canopy_pct:.0f}%, White: Open {open_pct:.0f}%) — Least-Cost Verification Route",
         fontsize=12, fontweight="bold", pad=10
     )
-    ax1.set_xlabel("UTM Easting (m) [EPSG:32617]", fontsize=9.5)
-    ax1.set_ylabel("UTM Northing (m) [EPSG:32617]", fontsize=9.5)
+    ax1.set_xlabel(f"UTM Easting (m) [{crs}]", fontsize=9.5)
+    ax1.set_ylabel(f"UTM Northing (m) [{crs}]", fontsize=9.5)
     ax1.set_xlim(left, right)
     ax1.set_ylim(bottom, top)
     ax1.xaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
@@ -146,8 +151,8 @@ def run():
         "RGB Orthomosaic (NEON 10 cm/px) — Field Trajectory through Natural Gaps",
         fontsize=12, fontweight="bold", pad=10
     )
-    ax2.set_xlabel("UTM Easting (m) [EPSG:32617]", fontsize=9.5)
-    ax2.set_ylabel("UTM Northing (m) [EPSG:32617]", fontsize=9.5)
+    ax2.set_xlabel(f"UTM Easting (m) [{crs}]", fontsize=9.5)
+    ax2.set_ylabel(f"UTM Northing (m) [{crs}]", fontsize=9.5)
     ax2.set_xlim(left, right)
     ax2.set_ylim(bottom, top)
     ax2.xaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))

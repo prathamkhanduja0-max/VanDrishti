@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   MapContainer,
   TileLayer,
   GeoJSON,
   Popup,
   Marker,
+  Pane,
   useMap
 } from 'react-leaflet';
 import L from 'leaflet';
@@ -28,7 +29,9 @@ import {
   Eye,
   Navigation,
   Crosshair,
-  Maximize2
+  Maximize2,
+  Activity,
+  Scissors
 } from 'lucide-react';
 
 // Custom Marker Icons for Route Stops and Entry Point
@@ -39,23 +42,23 @@ const createStopIcon = (number, bg = '#ef4444') => {
       <div style="
         background-color: ${bg};
         color: white;
-        width: 24px;
-        height: 24px;
+        width: 26px;
+        height: 26px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: 800;
-        font-size: 11px;
-        border: 2px solid white;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.7);
-        transform: translate(-12px, -12px);
+        font-size: 11.5px;
+        border: 2.5px solid white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.85);
+        transform: translate(-13px, -13px);
       ">
         ${number}
       </div>
     `,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
   });
 };
 
@@ -66,12 +69,12 @@ const createEntryIcon = () => {
       <div style="
         background-color: #0284c7;
         color: white;
-        padding: 3px 8px;
+        padding: 4px 9px;
         border-radius: 5px;
         font-weight: 800;
-        font-size: 10px;
+        font-size: 10.5px;
         border: 2px solid white;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.7);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.85);
         display: flex;
         align-items: center;
         white-space: nowrap;
@@ -80,14 +83,15 @@ const createEntryIcon = () => {
         ★ RANGER START
       </div>
     `,
-    iconSize: [95, 22],
-    iconAnchor: [48, 11],
+    iconSize: [100, 24],
+    iconAnchor: [50, 12],
   });
 };
 
-// Map Recenter & Invalidation Helper
-function MapBoundsUpdater({ center, zoom }) {
+// Map Recenter, Invalidation & Zoom Tracker Helper
+function MapController({ center, zoom, onZoomChange }) {
   const map = useMap();
+
   useEffect(() => {
     if (center && map) {
       map.setView(center, zoom);
@@ -96,6 +100,18 @@ function MapBoundsUpdater({ center, zoom }) {
       }, 150);
     }
   }, [center, zoom, map]);
+
+  useEffect(() => {
+    if (!map) return;
+    const handleZoom = () => {
+      onZoomChange(map.getZoom());
+    };
+    map.on('zoomend', handleZoom);
+    return () => {
+      map.off('zoomend', handleZoom);
+    };
+  }, [map, onZoomChange]);
+
   return null;
 }
 
@@ -107,20 +123,27 @@ export default function App() {
   const [error, setError] = useState(null);
   const [selectedFeature, setSelectedFeature] = useState(null);
 
-  // Layer States
+  // GeoJSON Layer Data States
   const [boundaryData, setBoundaryData] = useState(null);
   const [treesData, setTreesData] = useState(null);
   const [priorityData, setPriorityData] = useState(null);
-  const [routeData, setRouteData] = useState(null);
+  const [terrainRouteData, setTerrainRouteData] = useState(null);
+  const [legacyRouteData, setLegacyRouteData] = useState(null);
+  const [healthGridData, setHealthGridData] = useState(null);
+  const [degradationData, setDegradationData] = useState(null);
   const [fireHotspotsData, setFireHotspotsData] = useState(null);
 
+  // Layer Visibility States (Interpretable defaults on load)
   const [layers, setLayers] = useState({
+    healthGrid: true,
+    terrainRoute: true,
+    stops: true,
     boundary: true,
     trees: false,
-    priority: true,
-    route: true,
-    stops: true,
-    fires: true,
+    priority: false,
+    degradation: false,
+    fires: false,
+    legacyRoute: false,
   });
 
   const [layersOpen, setLayersOpen] = useState(true);
@@ -129,12 +152,17 @@ export default function App() {
   const mapCenter = useMemo(() => [29.681510, -81.952647], []);
   const [currentCenter, setCurrentCenter] = useState(mapCenter);
   const [currentZoom, setCurrentZoom] = useState(17);
+  const [mapZoomLevel, setMapZoomLevel] = useState(17);
+
+  const handleZoomChange = useCallback((z) => {
+    setMapZoomLevel(z);
+  }, []);
 
   const toggleLayer = (layerName) => {
     setLayers((prev) => ({ ...prev, [layerName]: !prev[layerName] }));
   };
 
-  // Fetch GeoJSON Layers for the 250m Large Study Area
+  // Fetch GeoJSON Layers for the 250m Study Area
   useEffect(() => {
     async function loadData() {
       try {
@@ -143,23 +171,38 @@ export default function App() {
           bRes,
           tRes,
           pRes,
-          rRes,
+          trRes,
+          lrRes,
+          hgRes,
+          degRes,
           fRes
         ] = await Promise.all([
           fetch('/data/OSBS_large_2019_boundary.geojson').then((r) => {
             if (!r.ok) throw new Error('Failed to load boundary geojson');
             return r.json();
           }),
-          fetch('/data/OSBS_large_2019_trees_filtered.geojson').then((r) => {
-            if (!r.ok) throw new Error('Failed to load trees geojson');
+          fetch('/data/OSBS_large_2019_trees_chm_valid.geojson').then((r) => {
+            if (!r.ok) throw new Error('Failed to load validated trees geojson');
             return r.json();
           }),
           fetch('/data/OSBS_large_2019_verification_priority.geojson').then((r) => {
             if (!r.ok) throw new Error('Failed to load priority geojson');
             return r.json();
           }),
+          fetch('/data/route_terrain.geojson').then((r) => {
+            if (!r.ok) throw new Error('Failed to load terrain route geojson');
+            return r.json();
+          }),
           fetch('/data/OSBS_large_2019_field_route_lcp_optimized.geojson').then((r) => {
-            if (!r.ok) throw new Error('Failed to load optimized route geojson');
+            if (!r.ok) return null;
+            return r.json();
+          }),
+          fetch('/data/forest_health_grid.geojson').then((r) => {
+            if (!r.ok) throw new Error('Failed to load forest health grid geojson');
+            return r.json();
+          }),
+          fetch('/data/chm_loss_polygons.geojson').then((r) => {
+            if (!r.ok) throw new Error('Failed to load degradation polygons geojson');
             return r.json();
           }),
           fetch('/data/fire_hotspots_osbs_live.geojson').then((r) => {
@@ -171,7 +214,10 @@ export default function App() {
         setBoundaryData(bRes);
         setTreesData(tRes);
         setPriorityData(pRes);
-        setRouteData(rRes);
+        setTerrainRouteData(trRes);
+        setLegacyRouteData(lrRes);
+        setHealthGridData(hgRes);
+        setDegradationData(degRes);
         setFireHotspotsData(fRes);
         setLoading(false);
       } catch (err) {
@@ -183,60 +229,99 @@ export default function App() {
     loadData();
   }, []);
 
-  // Sync Nav Preset
+  // Sync Navigation Presets (Explicit exclusive combinations)
   useEffect(() => {
     if (activeNav === 'Overview') {
       setLayers({
+        healthGrid: true,
+        terrainRoute: false,
+        stops: true,
         boundary: true,
         trees: false,
-        priority: true,
-        route: true,
-        stops: true,
-        fires: true,
+        priority: false,
+        degradation: false,
+        fires: false,
+        legacyRoute: false,
       });
-    } else if (activeNav === 'Live Map') {
+    } else if (activeNav === 'Forest Health') {
       setLayers({
+        healthGrid: true,
+        terrainRoute: false,
+        stops: false,
+        boundary: false,
+        trees: false,
+        priority: false,
+        degradation: false,
+        fires: false,
+        legacyRoute: false,
+      });
+    } else if (activeNav === 'Degradation') {
+      setLayers({
+        healthGrid: false,
+        terrainRoute: false,
+        stops: false,
+        boundary: true,
+        trees: false,
+        priority: false,
+        degradation: true,
+        fires: false,
+        legacyRoute: false,
+      });
+    } else if (activeNav === 'Terrain Route') {
+      setLayers({
+        healthGrid: false,
+        terrainRoute: true,
+        stops: true,
+        boundary: true,
+        trees: false,
+        priority: false,
+        degradation: false,
+        fires: false,
+        legacyRoute: false,
+      });
+    } else if (activeNav === 'Validated Trees') {
+      setLayers({
+        healthGrid: false,
+        terrainRoute: false,
+        stops: false,
         boundary: true,
         trees: true,
         priority: false,
-        route: false,
-        stops: false,
-        fires: true,
+        degradation: false,
+        fires: false,
+        legacyRoute: false,
       });
-    } else if (activeNav === 'Tree Priority') {
+    } else if (activeNav === 'Priority Audit') {
       setLayers({
+        healthGrid: false,
+        terrainRoute: false,
+        stops: true,
         boundary: true,
         trees: false,
         priority: true,
-        route: false,
-        stops: false,
+        degradation: false,
         fires: false,
-      });
-    } else if (activeNav === 'Field Patrol') {
-      setLayers({
-        boundary: true,
-        trees: false,
-        priority: false,
-        route: true,
-        stops: true,
-        fires: false,
+        legacyRoute: false,
       });
     } else if (activeNav === 'Fire Risk') {
       setLayers({
+        healthGrid: false,
+        terrainRoute: false,
+        stops: false,
         boundary: true,
         trees: false,
         priority: false,
-        route: false,
-        stops: false,
+        degradation: false,
         fires: true,
+        legacyRoute: false,
       });
     }
   }, [activeNav]);
 
-  // Derived Real Statistics (100% dynamic from GeoJSON)
+  // Derived Consistent Real Statistics (100% dynamic from GeoJSON)
   const stats = useMemo(() => {
     const totalTrees = treesData?.features?.length || 0;
-    const insideTrees = treesData?.features?.filter((f) => f.properties?.inside_boundary)?.length || 0;
+    const insideTrees = treesData?.features?.filter((f) => f.properties?.inside_boundary === true)?.length || 0;
     const outsideTrees = totalTrees - insideTrees;
 
     const highPriorityList = priorityData?.features?.filter((f) => f.properties?.verification_priority === 'HIGH') || [];
@@ -246,10 +331,30 @@ export default function App() {
 
     const fireCount = fireHotspotsData?.features?.length || 0;
 
-    const routeProps = routeData?.features?.[0]?.properties || {};
-    const routeDist = routeProps.total_physical_distance_meters || 432.13;
-    const routeSaved = routeProps.distance_saved_meters || 17.45;
-    const routeSequence = routeProps.visiting_sequence || '';
+    // Terrain Route Statistics
+    const terrainProps = terrainRouteData?.features?.[0]?.properties || {};
+    const terrainDist = terrainProps.total_physical_distance_meters || 0;
+    const terrainTime = terrainProps.total_travel_time_minutes || 0;
+    const terrainSaved = terrainProps.time_saved_minutes || 0;
+    const routeSequence = terrainProps.visiting_sequence || '';
+
+    // Legacy Route Statistics
+    const legacyProps = legacyRouteData?.features?.[0]?.properties || {};
+    const legacyDist = legacyProps.total_physical_distance_meters || 0;
+
+    // Forest Health Grid Statistics
+    const healthFeatures = healthGridData?.features || [];
+    const gradeA = healthFeatures.filter((f) => f.properties?.grade === 'A').length;
+    const gradeB = healthFeatures.filter((f) => f.properties?.grade === 'B').length;
+    const gradeC = healthFeatures.filter((f) => f.properties?.grade === 'C').length;
+    const gradeD = healthFeatures.filter((f) => f.properties?.grade === 'D').length;
+    const totalHealthCells = healthFeatures.length;
+
+    // Degradation Statistics
+    const degFeatures = degradationData?.features || [];
+    const removalCount = degFeatures.filter((f) => f.properties?.class_name === 'removal' || f.properties?.class_id === 1).length;
+    const thinningCount = degFeatures.filter((f) => f.properties?.class_name === 'thinning' || f.properties?.class_id === 2).length;
+    const totalDegPolygons = degFeatures.length;
 
     return {
       totalTrees,
@@ -259,12 +364,22 @@ export default function App() {
       mediumPriority,
       lowPriority,
       fireCount,
-      routeDist: routeDist.toFixed(1),
-      routeSaved: routeSaved.toFixed(1),
+      terrainDist: terrainDist.toFixed(1),
+      terrainTime: terrainTime.toFixed(2),
+      terrainSaved: terrainSaved.toFixed(2),
+      legacyDist: legacyDist.toFixed(1),
       routeSequence,
       highPriorityList,
+      totalHealthCells,
+      gradeA,
+      gradeB,
+      gradeC,
+      gradeD,
+      totalDegPolygons,
+      removalCount,
+      thinningCount,
     };
-  }, [treesData, priorityData, fireHotspotsData, routeData]);
+  }, [treesData, priorityData, fireHotspotsData, terrainRouteData, legacyRouteData, healthGridData, degradationData]);
 
   // High priority stops ordered by visiting sequence
   const orderedStops = useMemo(() => {
@@ -293,12 +408,25 @@ export default function App() {
   const handleCenterStudyArea = () => {
     setCurrentCenter([29.681510, -81.952647]);
     setCurrentZoom(17);
+    setMapZoomLevel(17);
   };
 
   const handleFocusStop = (st) => {
     setCurrentCenter([st.lat, st.lon]);
     setCurrentZoom(19);
+    setMapZoomLevel(19);
     setSelectedFeature({ type: 'tree', properties: st.properties });
+  };
+
+  // Health Grid Grade Color Styling
+  const getHealthGradeColor = (grade) => {
+    switch (grade) {
+      case 'A': return '#22c55e'; // Green
+      case 'B': return '#84cc16'; // Yellow-Green / Lime
+      case 'C': return '#f97316'; // Orange
+      case 'D': return '#ef4444'; // Red
+      default: return '#94a3b8';
+    }
   };
 
   return (
@@ -323,10 +451,10 @@ export default function App() {
           <div className="scope-badge-card">
             <div className="scope-badge-title">
               <Sparkles size={13} />
-              <span>OSBS Large Study Area</span>
+              <span>OSBS Study Area</span>
             </div>
             <div className="scope-badge-desc">
-              Ordway-Swisher, FL • 250m × 250m Area (6.25 ha, NEON 10cm AOP)
+              Ordway-Swisher, FL • 250m × 250m (6.25 ha, NEON LiDAR & AOP)
             </div>
           </div>
 
@@ -334,12 +462,13 @@ export default function App() {
           <nav className="nav-list">
             {[
               { id: 'Overview', icon: Layers, label: 'Overview' },
-              { id: 'Live Map', icon: Compass, label: 'Live Map (All Trees)' },
-              { id: 'Tree Priority', icon: AlertTriangle, label: 'Priority Audit (13 High)' },
-              { id: 'Field Patrol', icon: Navigation, label: 'TSP Route (432m)' },
+              { id: 'Forest Health', icon: Activity, label: `Forest Health (${stats.totalHealthCells} Cells)` },
+              { id: 'Degradation', icon: Scissors, label: `Degradation (${stats.totalDegPolygons} Polygons)` },
+              { id: 'Terrain Route', icon: Navigation, label: `Terrain Route (${stats.terrainDist}m)` },
+              { id: 'Validated Trees', icon: Compass, label: `Validated Trees (${stats.totalTrees})` },
+              { id: 'Priority Audit', icon: AlertTriangle, label: `Priority Audit (${stats.highPriority} High)` },
               { id: 'Canopy Mask', icon: Eye, label: 'Canopy & Route View' },
-              { id: 'Fire Risk', icon: Flame, label: 'Fire Risk (NASA)' },
-              { id: 'Reports', icon: FileText, label: 'Methodology & Specs' },
+              { id: 'Fire Risk', icon: Flame, label: `Fire Risk (${stats.fireCount})` },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeNav === item.id;
@@ -365,11 +494,11 @@ export default function App() {
               <span className="status-dot"></span> System Operational
             </span>
             <span style={{ fontSize: '9px', background: '#052e16', padding: '1px 5px', borderRadius: '3px', border: '1px solid #10b981', color: '#6ee7b7' }}>
-              v2.0 Large
+              v2.1 Full
             </span>
           </div>
           <div>CRS: EPSG:4326 (WGS84 Lat/Lon)</div>
-          <div>Held-Karp TSP • DeepForest • VIIRS</div>
+          <div>Tobler Terrain TSP • CHM Diff • VIIRS</div>
         </div>
       </aside>
 
@@ -385,7 +514,7 @@ export default function App() {
               <span className="prototype-tag">250m × 250m (6.25 ha)</span>
             </h2>
             <div className="topbar-sub">
-              NEON Airborne Observation Platform (AOP) • DeepForest AI • NASA FIRMS VIIRS • Held-Karp LCP
+              NEON Airborne Observation Platform (AOP) • LiDAR CHM & DTM • NASA FIRMS VIIRS • Held-Karp Terrain TSP
             </div>
           </div>
 
@@ -422,7 +551,7 @@ export default function App() {
           {/* Card 1 */}
           <div className="stat-card">
             <div>
-              <div className="stat-label">Total Trees Detected</div>
+              <div className="stat-label">LiDAR Validated Trees</div>
               <div className="stat-value">
                 {stats.totalTrees} <span className="stat-unit">canopies</span>
               </div>
@@ -438,28 +567,28 @@ export default function App() {
           {/* Card 2 */}
           <div className="stat-card">
             <div>
-              <div className="stat-label">HIGH Priority Targets</div>
-              <div className="stat-value" style={{ color: '#f87171' }}>
-                {stats.highPriority} <span className="stat-unit">trees</span>
+              <div className="stat-label">Forest Health Score</div>
+              <div className="stat-value" style={{ color: '#4ade80' }}>
+                {stats.totalHealthCells} <span className="stat-unit">cells (25m)</span>
               </div>
               <div className="stat-sub">
-                {stats.mediumPriority} Medium • {stats.lowPriority} Low Priority
+                Grades: <span style={{ color: '#22c55e', fontWeight: 700 }}>A:{stats.gradeA}</span> • <span style={{ color: '#84cc16', fontWeight: 700 }}>B:{stats.gradeB}</span> • <span style={{ color: '#f97316', fontWeight: 700 }}>C:{stats.gradeC}</span> • <span style={{ color: '#ef4444', fontWeight: 700 }}>D:{stats.gradeD}</span>
               </div>
             </div>
-            <div className="stat-icon-wrap red">
-              <AlertTriangle size={18} />
+            <div className="stat-icon-wrap green">
+              <Activity size={18} />
             </div>
           </div>
 
           {/* Card 3 */}
           <div className="stat-card">
             <div>
-              <div className="stat-label">TSP-Optimized Route</div>
+              <div className="stat-label">Terrain TSP Route</div>
               <div className="stat-value" style={{ color: '#22d3ee' }}>
-                {stats.routeDist} <span className="stat-unit">meters</span>
+                {stats.terrainDist} <span className="stat-unit">m ({stats.terrainTime} min)</span>
               </div>
               <div className="stat-sub">
-                <span style={{ color: '#6ee7b7', fontWeight: 600 }}>-{stats.routeSaved}m</span> vs NN (Zero Backtrack)
+                <span style={{ color: '#6ee7b7', fontWeight: 600 }}>-{stats.terrainSaved} min</span> vs NN • {stats.highPriority} Stops
               </div>
             </div>
             <div className="stat-icon-wrap cyan">
@@ -470,14 +599,16 @@ export default function App() {
           {/* Card 4 */}
           <div className="stat-card">
             <div>
-              <div className="stat-label">NASA FIRMS Fire Hotspots</div>
-              <div className="stat-value" style={{ color: '#fbbf24' }}>
-                {stats.fireCount} <span className="stat-unit">hotspots</span>
+              <div className="stat-label">Canopy Degradation</div>
+              <div className="stat-value" style={{ color: '#f87171' }}>
+                {stats.totalDegPolygons} <span className="stat-unit">zones</span>
               </div>
-              <div className="stat-sub">VIIRS 375m NRT Regional Alert</div>
+              <div className="stat-sub">
+                <span style={{ color: '#ef4444', fontWeight: 600 }}>{stats.removalCount} Removal</span> • {stats.thinningCount} Thinning
+              </div>
             </div>
-            <div className="stat-icon-wrap amber">
-              <Flame size={18} />
+            <div className="stat-icon-wrap red">
+              <Scissors size={18} />
             </div>
           </div>
         </div>
@@ -491,10 +622,10 @@ export default function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ fontWeight: 700, color: '#6ee7b7', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Eye size={18} />
-                    <span>Clean Canopy Mask + Field Route Visualization (250m Study Area)</span>
+                    <span>Terrain-Aware Route + Canopy Height Model (250m Study Area)</span>
                   </div>
                   <a
-                    href="/data/OSBS_large_2019_route_clean.png"
+                    href="/data/OSBS_large_2019_overview_map_optimized.png"
                     target="_blank"
                     rel="noreferrer"
                     style={{ fontSize: '11px', color: '#38bdf8', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
@@ -503,12 +634,12 @@ export default function App() {
                   </a>
                 </div>
                 <img
-                  src="/data/OSBS_large_2019_route_clean.png"
-                  alt="OSBS Large 2019 Clean Canopy Mask and Field Route"
+                  src="/data/OSBS_large_2019_overview_map_optimized.png"
+                  alt="OSBS Large 2019 Terrain-Aware TSP Route and CHM"
                 />
                 <div style={{ fontSize: '11px', color: '#94a3b8', lineHeight: 1.4 }}>
-                  <b>Panel A (Top)</b>: Binary Excess Green (ExG) Canopy Mask (Black = Canopy 71%, White = Open Walkable Ground 29%) with TSP-Optimized 432m Dijkstra Route (Cyan) and 13 Verification Stops.<br />
-                  <b>Panel B (Bottom)</b>: NEON 10cm True-Color RGB Orthomosaic confirming natural gap navigation and zero backtracking.
+                  <b>Panel 1 (Left)</b>: High-Resolution RGB Orthomosaic with Terrain-Aware TSP Route (488.9 m, 14.96 min) across 13 HIGH stops.<br />
+                  <b>Panel 2 (Right)</b>: NEON LiDAR Canopy Height Model (CHM p95=16.6m) showing optimal navigation through natural forest gaps.
                 </div>
               </div>
             </div>
@@ -530,6 +661,32 @@ export default function App() {
                 </div>
               )}
 
+              {/* Map Zoom Level Notice Overlay (when zoom < 17 and trees active) */}
+              {layers.trees && mapZoomLevel < 17 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '12px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 800,
+                  background: 'rgba(6, 17, 12, 0.92)',
+                  border: '1px solid #143624',
+                  color: '#6ee7b7',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.6)',
+                  pointerEvents: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <Info size={13} style={{ color: '#38bdf8' }} />
+                  <span>Zoom in (Level {mapZoomLevel}/17+) to view micro-canopy points</span>
+                </div>
+              )}
+
               <MapContainer
                 center={currentCenter}
                 zoom={currentZoom}
@@ -538,7 +695,7 @@ export default function App() {
                 scrollWheelZoom={true}
                 style={{ height: '100%', width: '100%' }}
               >
-                <MapBoundsUpdater center={currentCenter} zoom={currentZoom} />
+                <MapController center={currentCenter} zoom={currentZoom} onZoomChange={handleZoomChange} />
 
                 {/* Basemap Tiles */}
                 {basemap === 'satellite' ? (
@@ -556,9 +713,76 @@ export default function App() {
                   />
                 )}
 
-                {/* 1. PROJECT BOUNDARY LAYER */}
+                {/* 1. FOREST HEALTH GRID (CHOROPLETH BY GRADE) */}
+                {layers.healthGrid && healthGridData && (
+                  <GeoJSON
+                    key="health-grid-layer"
+                    data={healthGridData}
+                    style={(feature) => {
+                      const grade = feature.properties?.grade;
+                      const fillColor = getHealthGradeColor(grade);
+                      return {
+                        fillColor: fillColor,
+                        fillOpacity: 0.50,
+                        color: '#ffffff',
+                        weight: 1.0,
+                        opacity: 0.8,
+                      };
+                    }}
+                    onEachFeature={(feature, layer) => {
+                      const p = feature.properties || {};
+                      layer.bindPopup(`
+                        <div style="font-size:12px; min-width:180px;">
+                          <b style="font-size:13px; color:${getHealthGradeColor(p.grade)};">Cell ${p.cell_id} — Grade ${p.grade}</b><br/>
+                          <b>Health Score:</b> <span style="font-weight:bold; color:#f1f5f9;">${p.score !== null && p.score !== undefined ? Number(p.score).toFixed(1) : 'N/A'} / 100</span><br/>
+                          <b>Canopy Cover:</b> ${p.canopy_cover !== undefined ? (p.canopy_cover * 100).toFixed(1) + '%' : 'N/A'}<br/>
+                          <b>Structural Diversity (σ):</b> ${p.structural_diversity !== undefined ? p.structural_diversity + ' m' : 'N/A'}<br/>
+                          <b>Loss Density:</b> ${p.loss_density !== undefined ? (p.loss_density * 100).toFixed(2) + '%' : 'N/A'}<br/>
+                          <span style="font-size:10px; color:#94a3b8;">Resolution: 25m × 25m LiDAR micro-grid</span>
+                        </div>
+                      `);
+                      layer.on('click', () => setSelectedFeature({ type: 'health_cell', properties: p }));
+                    }}
+                  />
+                )}
+
+                {/* 2. CANOPY DEGRADATION POLYGONS */}
+                {layers.degradation && degradationData && (
+                  <GeoJSON
+                    key="degradation-polygons-layer"
+                    data={degradationData}
+                    style={(feature) => {
+                      const className = feature.properties?.class_name;
+                      const isRemoval = className === 'removal' || feature.properties?.class_id === 1;
+                      return {
+                        fillColor: isRemoval ? '#991b1b' : '#f97316',
+                        fillOpacity: 0.65,
+                        color: isRemoval ? '#ef4444' : '#fdba74',
+                        weight: 1.5,
+                        opacity: 0.95,
+                      };
+                    }}
+                    onEachFeature={(feature, layer) => {
+                      const p = feature.properties || {};
+                      layer.bindPopup(`
+                        <div style="font-size:12px;">
+                          <b style="color:${p.class_name === 'removal' ? '#ef4444' : '#fb923c'}; font-size:13px;">
+                            Canopy ${p.class_name ? p.class_name.toUpperCase() : 'DEGRADATION'}
+                          </b><br/>
+                          <b>Impact Area:</b> ${p.area_m2} m²<br/>
+                          <b>Classification:</b> ${p.class_name === 'removal' ? 'Severe Canopy Loss (ΔH ≤ -5m)' : 'Canopy Thinning (-5m < ΔH ≤ -2m)'}<br/>
+                          <span style="font-size:10px; color:#94a3b8;">Multi-Temporal LiDAR Differencing</span>
+                        </div>
+                      `);
+                      layer.on('click', () => setSelectedFeature({ type: 'degradation', properties: p }));
+                    }}
+                  />
+                )}
+
+                {/* 3. PROJECT BOUNDARY LAYER */}
                 {layers.boundary && boundaryData && (
                   <GeoJSON
+                    key="corridor-boundary-layer"
                     data={boundaryData}
                     style={() => ({
                       color: '#ef4444',
@@ -580,33 +804,35 @@ export default function App() {
                   />
                 )}
 
-                {/* 2. TSP-OPTIMIZED ROUTE (CYAN) */}
-                {layers.route && routeData && (
+                {/* 4. PRIMARY TERRAIN TSP ROUTE (CYAN) */}
+                {layers.terrainRoute && terrainRouteData && (
                   <>
                     <GeoJSON
-                      data={routeData}
+                      key="terrain-tsp-route"
+                      data={terrainRouteData}
                       style={() => ({
                         color: '#00e5ff',
-                        weight: 3.8,
+                        weight: 4.0,
                         opacity: 0.95,
                       })}
                       onEachFeature={(feature, layer) => {
                         const props = feature.properties || {};
                         layer.bindPopup(`
                           <div style="font-size:12px;">
-                            <b style="color:#22d3ee;">TSP-Optimized Dijkstra Least-Cost Path</b><br/>
-                            <b>Distance:</b> ${props.total_physical_distance_meters || 432.13} m<br/>
-                            <b>Algorithm:</b> Exact Held-Karp Dynamic Programming<br/>
-                            <b>Distance Saved:</b> -${props.distance_saved_meters || 17.45}m vs NN (Zero Backtracking)<br/>
-                            <b>Stops Count:</b> ${props.stops_count || 13} HIGH-Priority Trees
+                            <b style="color:#22d3ee; font-size:13px;">Terrain-Aware Held-Karp TSP Route</b><br/>
+                            <b>Distance:</b> ${props.total_physical_distance_meters || stats.terrainDist} m<br/>
+                            <b>Estimated Time:</b> ${props.total_travel_time_minutes || stats.terrainTime} min<br/>
+                            <b>Model:</b> Tobler Slope Cost + CHM Canopy Height<br/>
+                            <b>Time Saved:</b> -${props.time_saved_minutes || stats.terrainSaved} min vs NN<br/>
+                            <b>Stops Count:</b> ${props.stops_count || stats.highPriority} HIGH-Priority Trees
                           </div>
                         `);
-                        layer.on('click', () => setSelectedFeature({ type: 'route', properties: props }));
+                        layer.on('click', () => setSelectedFeature({ type: 'route_terrain', properties: props }));
                       }}
                     />
 
                     {/* Ranger Entry Marker */}
-                    <Marker position={[29.6803826, -81.9539256]} icon={createEntryIcon()}>
+                    <Marker position={[29.6803826, -81.9539256]} icon={createEntryIcon()} zIndexOffset={900}>
                       <Popup>
                         <div style={{ fontSize: '12px' }}>
                           <b style={{ color: '#38bdf8' }}>Ranger Entry Base (Start)</b><br />
@@ -617,43 +843,81 @@ export default function App() {
                   </>
                 )}
 
-                {/* 3. NUMBERED ROUTE STOPS (1-13) */}
-                {layers.stops && orderedStops.map((st) => (
-                  <Marker
-                    key={`stop-${st.stopNum}`}
-                    position={[st.lat, st.lon]}
-                    icon={createStopIcon(st.stopNum)}
-                    eventHandlers={{
-                      click: () => setSelectedFeature({ type: 'tree', properties: st.properties }),
+                {/* 5. LEGACY ExG ROUTE (PURPLE / DASHED FOR ABLATION COMPARISON) */}
+                {layers.legacyRoute && legacyRouteData && (
+                  <GeoJSON
+                    key="legacy-exg-route"
+                    data={legacyRouteData}
+                    style={() => ({
+                      color: '#c084fc',
+                      weight: 2.8,
+                      dashArray: '5, 5',
+                      opacity: 0.85,
+                    })}
+                    onEachFeature={(feature, layer) => {
+                      const props = feature.properties || {};
+                      layer.bindPopup(`
+                        <div style="font-size:12px;">
+                          <b style="color:#c084fc; font-size:13px;">Legacy 2D ExG TSP Route</b><br/>
+                          <b>Distance:</b> ${props.total_physical_distance_meters || stats.legacyDist} m<br/>
+                          <b>Model:</b> 2D Optical Excess Green (No Slope)<br/>
+                          <b>Note:</b> Baseline route for ablation comparison
+                        </div>
+                      `);
+                      layer.on('click', () => setSelectedFeature({ type: 'route_legacy', properties: props }));
                     }}
-                  >
-                    <Popup>
-                      <div style={{ fontSize: '12px' }}>
-                        <b style={{ color: '#f87171' }}>Stop #{st.stopNum}: Tree #{st.treeId}</b><br />
-                        <b>Priority:</b> HIGH (Mandatory Ground Check)<br />
-                        <b>Confidence:</b> {(st.properties.confidence * 100).toFixed(1)}%<br />
-                        <b>Corridor Status:</b> {st.properties.inside_boundary ? 'INSIDE CORRIDOR' : 'OUTSIDE'}<br />
-                        <b>Rationale:</b> {st.properties.priority_reason || 'N/A'}<br />
-                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>WGS84: {st.lat.toFixed(5)}° N, {st.lon.toFixed(5)}° W</span>
-                      </div>
-                    </Popup>
-                  </Marker>
-                ))}
+                  />
+                )}
 
-                {/* 4. ALL PRIORITY TREES CIRCLE MARKERS */}
+                {/* 6. ZOOM-DEPENDENT BACKGROUND TREES (1,979 VALIDATED DETECTIONS) */}
+                {/* zoom < 17: Omit individual clutter; zoom 17-19: small subtle dots; zoom >= 19: full markers */}
+                {layers.trees && treesData && mapZoomLevel >= 17 && (
+                  <GeoJSON
+                    key={`background-trees-zoom-${mapZoomLevel >= 19 ? 'high' : 'mid'}`}
+                    data={treesData}
+                    pointToLayer={(feature, latlng) => {
+                      const inside = feature.properties?.inside_boundary;
+                      const isHighZoom = mapZoomLevel >= 19;
+                      return L.circleMarker(latlng, {
+                        radius: isHighZoom ? 4.5 : 2.5,
+                        fillColor: inside ? '#fbbf24' : '#38bdf8',
+                        color: isHighZoom ? '#ffffff' : 'transparent',
+                        weight: isHighZoom ? 1.0 : 0,
+                        stroke: isHighZoom,
+                        fillOpacity: isHighZoom ? 0.85 : 0.40,
+                      });
+                    }}
+                    onEachFeature={(feature, layer) => {
+                      if (mapZoomLevel >= 19) {
+                        const props = feature.properties || {};
+                        layer.bindPopup(`
+                          <div style="font-size:12px;">
+                            <b>Tree Canopy #${props.tree_id}</b><br/>
+                            <b>LiDAR Height:</b> ${props.chm_height_m ? props.chm_height_m + ' m' : 'Validated (≥2m)'}<br/>
+                            <b>Corridor Status:</b> ${props.inside_boundary ? 'INSIDE CORRIDOR' : 'OUTSIDE'}<br/>
+                            <b>Confidence:</b> ${(props.confidence * 100).toFixed(1)}%
+                          </div>
+                        `);
+                      }
+                    }}
+                  />
+                )}
+
+                {/* 7. ALL PRIORITY TREES CIRCLE MARKERS */}
                 {layers.priority && priorityData && (
                   <GeoJSON
+                    key={`priority-trees-zoom-${mapZoomLevel >= 19 ? 'high' : 'normal'}`}
                     data={priorityData}
                     pointToLayer={(feature, latlng) => {
                       const priority = feature.properties?.verification_priority;
                       let color = '#22c55e'; // LOW
-                      let radius = 4.5;
+                      let radius = mapZoomLevel >= 19 ? 5.5 : 4.0;
                       if (priority === 'HIGH') {
                         color = '#ef4444';
-                        radius = 7;
+                        radius = mapZoomLevel >= 19 ? 8.0 : 6.0;
                       } else if (priority === 'MEDIUM') {
                         color = '#f59e0b';
-                        radius = 5.5;
+                        radius = mapZoomLevel >= 19 ? 6.5 : 4.5;
                       }
 
                       return L.circleMarker(latlng, {
@@ -684,36 +948,36 @@ export default function App() {
                   />
                 )}
 
-                {/* 5. BASE TREES (IF PRIORITY OFF) */}
-                {layers.trees && !layers.priority && treesData && (
-                  <GeoJSON
-                    data={treesData}
-                    pointToLayer={(feature, latlng) => {
-                      const inside = feature.properties?.inside_boundary;
-                      return L.circleMarker(latlng, {
-                        radius: 5,
-                        fillColor: inside ? '#fbbf24' : '#38bdf8',
-                        color: '#ffffff',
-                        weight: 1.2,
-                        fillOpacity: 0.8,
-                      });
-                    }}
-                    onEachFeature={(feature, layer) => {
-                      const props = feature.properties || {};
-                      layer.bindPopup(`
-                        <div style="font-size:12px;">
-                          <b>Tree #${props.tree_id}</b><br/>
-                          <b>Corridor:</b> ${props.inside_boundary ? 'INSIDE' : 'OUTSIDE'}<br/>
-                          <b>Confidence:</b> ${(props.confidence * 100).toFixed(1)}%
+                {/* 8. 13 MANDATORY HIGH-PRIORITY AUDIT STOPS (ALWAYS RENDERED WITH HIGH Z-INDEX PANE) */}
+                <Pane name="auditStopsPane" style={{ zIndex: 650 }}>
+                  {layers.stops && orderedStops.map((st) => (
+                    <Marker
+                      key={`stop-${st.stopNum}`}
+                      position={[st.lat, st.lon]}
+                      icon={createStopIcon(st.stopNum)}
+                      zIndexOffset={1000}
+                      eventHandlers={{
+                        click: () => setSelectedFeature({ type: 'tree', properties: st.properties }),
+                      }}
+                    >
+                      <Popup>
+                        <div style={{ fontSize: '12px' }}>
+                          <b style={{ color: '#f87171', fontSize: '13px' }}>Stop #{st.stopNum}: Tree #{st.treeId}</b><br />
+                          <b>Priority:</b> HIGH (Mandatory Ground Check)<br />
+                          <b>Confidence:</b> {(st.properties.confidence * 100).toFixed(1)}%<br />
+                          <b>Corridor Status:</b> {st.properties.inside_boundary ? 'INSIDE CORRIDOR' : 'OUTSIDE'}<br />
+                          <b>Rationale:</b> {st.properties.priority_reason || 'N/A'}<br />
+                          <span style={{ fontSize: '10px', color: '#94a3b8' }}>WGS84: {st.lat.toFixed(5)}° N, {st.lon.toFixed(5)}° W</span>
                         </div>
-                      `);
-                    }}
-                  />
-                )}
+                      </Popup>
+                    </Marker>
+                  ))}
+                </Pane>
 
-                {/* 6. FIRE HOTSPOTS */}
+                {/* 9. FIRE HOTSPOTS */}
                 {layers.fires && fireHotspotsData && (
                   <GeoJSON
+                    key="fire-hotspots-layer"
                     data={fireHotspotsData}
                     pointToLayer={(feature, latlng) => {
                       const frp = feature.properties?.frp_mw || 1.0;
@@ -743,13 +1007,13 @@ export default function App() {
                 )}
               </MapContainer>
 
-              {/* FLOATING LAYER TOGGLES & LEGEND (COLLAPSIBLE) */}
+              {/* FLOATING LAYER TOGGLES & DYNAMIC LEGEND */}
               {layersOpen ? (
                 <div className="layer-panel">
                   <div className="layer-panel-header">
                     <div className="layer-panel-title">
                       <Layers size={14} style={{ color: '#34d399' }} />
-                      <span>Map Layers ({Object.values(layers).filter(Boolean).length}/6)</span>
+                      <span>Map Layers ({Object.values(layers).filter(Boolean).length}/9)</span>
                     </div>
                     <button
                       onClick={() => setLayersOpen(false)}
@@ -762,12 +1026,15 @@ export default function App() {
 
                   <div>
                     {[
+                      { id: 'healthGrid', label: `Forest Health Grid (${stats.totalHealthCells})`, color: '#22c55e' },
+                      { id: 'degradation', label: `Degradation Zones (${stats.totalDegPolygons})`, color: '#991b1b' },
+                      { id: 'terrainRoute', label: `Terrain TSP Route (${stats.terrainDist}m)`, color: '#00e5ff' },
+                      { id: 'legacyRoute', label: `Route (ExG, legacy, ${stats.legacyDist}m)`, color: '#c084fc' },
+                      { id: 'stops', label: `Numbered Audit Stops (${stats.highPriority})`, color: '#ef4444' },
+                      { id: 'priority', label: `Priority Trees (${stats.insideTrees + stats.outsideTrees})`, color: '#f59e0b' },
+                      { id: 'trees', label: `Validated Trees (${stats.totalTrees})`, color: '#38bdf8' },
                       { id: 'boundary', label: 'Project Corridor (24% Area)', color: '#ef4444' },
-                      { id: 'priority', label: `Priority Trees (${stats.totalTrees})`, color: '#ef4444' },
-                      { id: 'route', label: 'TSP Least-Cost Path (432m)', color: '#00e5ff' },
-                      { id: 'stops', label: `Numbered Audit Stops (${stats.highPriority})`, color: '#f87171' },
-                      { id: 'trees', label: 'Base Detection (All 684)', color: '#38bdf8' },
-                      { id: 'fires', label: `NASA FIRMS Hotspots (${stats.fireCount})`, color: '#f97316' },
+                      { id: 'fires', label: `NASA FIRMS Fires (${stats.fireCount})`, color: '#f97316' },
                     ].map((item) => (
                       <label key={item.id} className="layer-item">
                         <div className="layer-left">
@@ -784,15 +1051,30 @@ export default function App() {
                     ))}
                   </div>
 
-                  {/* Priority Legend */}
-                  <div className="legend-box">
-                    <div style={{ fontWeight: 600, color: '#94a3b8' }}>Verification Priority:</div>
-                    <div className="legend-swatches">
-                      <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> HIGH ({stats.highPriority})</span>
-                      <span className="swatch-item"><span className="layer-dot" style={{ background: '#f59e0b' }}></span> MED ({stats.mediumPriority})</span>
-                      <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> LOW ({stats.lowPriority})</span>
+                  {/* Dynamic Forest Health Legend */}
+                  {layers.healthGrid && (
+                    <div className="legend-box" style={{ marginTop: '8px', borderTop: '1px solid #143624', paddingTop: '6px' }}>
+                      <div style={{ fontWeight: 600, color: '#34d399' }}>Forest Health Grades (25m):</div>
+                      <div className="legend-swatches">
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> A ({stats.gradeA})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#84cc16' }}></span> B ({stats.gradeB})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#f97316' }}></span> C ({stats.gradeC})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> D ({stats.gradeD})</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Priority Legend */}
+                  {layers.priority && (
+                    <div className="legend-box">
+                      <div style={{ fontWeight: 600, color: '#94a3b8' }}>Verification Priority:</div>
+                      <div className="legend-swatches">
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> HIGH ({stats.highPriority})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#f59e0b' }}></span> MED ({stats.mediumPriority})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> LOW ({stats.lowPriority})</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <button
@@ -801,7 +1083,7 @@ export default function App() {
                   title="Expand Map Layers Control"
                 >
                   <Layers size={14} style={{ color: '#34d399' }} />
-                  <span>Layers ({Object.values(layers).filter(Boolean).length}/6)</span>
+                  <span>Layers ({Object.values(layers).filter(Boolean).length}/9)</span>
                   <ChevronDown size={13} style={{ color: '#94a3b8' }} />
                 </button>
               )}
@@ -833,20 +1115,20 @@ export default function App() {
                 <div className="alert-card route">
                   <div className="alert-title">
                     <Navigation size={14} />
-                    <span>TSP Route: {stats.routeDist}m (Zero Backtrack)</span>
+                    <span>Terrain TSP: {stats.terrainDist}m ({stats.terrainTime} min)</span>
                   </div>
                   <div className="alert-text">
-                    Exact Held-Karp Dynamic Programming solution saved {stats.routeSaved}m vs nearest-neighbor baseline.
+                    Held-Karp terrain-aware TSP saved {stats.terrainSaved} min traversal time vs nearest-neighbor baseline.
                   </div>
                 </div>
 
                 <div className="alert-card fire">
                   <div className="alert-title">
-                    <Flame size={14} />
-                    <span>{stats.fireCount} NASA Thermal Anomalies</span>
+                    <Scissors size={14} />
+                    <span>{stats.totalDegPolygons} Canopy Loss Zones</span>
                   </div>
                   <div className="alert-text">
-                    NASA FIRMS VIIRS (S-NPP 375m) regional fire hotspots monitored in 5-day rolling window.
+                    {stats.removalCount} severe removal polygons (ΔH ≤ -5m) and {stats.thinningCount} thinning polygons detected via LiDAR differencing.
                   </div>
                 </div>
               </div>
@@ -878,11 +1160,32 @@ export default function App() {
                       </div>
                     )}
 
-                    {selectedFeature.type === 'route' && (
+                    {selectedFeature.type === 'health_cell' && (
                       <div>
-                        <div className="inspector-row"><span className="inspector-key">Route Name:</span><span className="inspector-val">TSP-Optimized LCP</span></div>
+                        <div className="inspector-row"><span className="inspector-key">Cell ID:</span><span className="inspector-val">{selectedFeature.properties.cell_id}</span></div>
+                        <div className="inspector-row"><span className="inspector-key">Grade:</span><span className="inspector-val" style={{ color: getHealthGradeColor(selectedFeature.properties.grade), fontWeight: 'bold' }}>Grade {selectedFeature.properties.grade}</span></div>
+                        <div className="inspector-row"><span className="inspector-key">Health Score:</span><span className="inspector-val">{selectedFeature.properties.score !== null ? Number(selectedFeature.properties.score).toFixed(1) : 'N/A'} / 100</span></div>
+                        <div className="inspector-row"><span className="inspector-key">Canopy Cover:</span><span className="inspector-val">{(selectedFeature.properties.canopy_cover * 100).toFixed(1)}%</span></div>
+                        <div className="inspector-row"><span className="inspector-key">Height Diversity (σ):</span><span className="inspector-val">{selectedFeature.properties.structural_diversity} m</span></div>
+                        <div className="inspector-row"><span className="inspector-key">Loss Density:</span><span className="inspector-val">{(selectedFeature.properties.loss_density * 100).toFixed(2)}%</span></div>
+                      </div>
+                    )}
+
+                    {selectedFeature.type === 'degradation' && (
+                      <div>
+                        <div className="inspector-row"><span className="inspector-key">Class:</span><span className="inspector-val" style={{ color: selectedFeature.properties.class_name === 'removal' ? '#ef4444' : '#fb923c', fontWeight: 'bold' }}>{selectedFeature.properties.class_name ? selectedFeature.properties.class_name.toUpperCase() : 'LOSS'}</span></div>
+                        <div className="inspector-row"><span className="inspector-key">Impact Area:</span><span className="inspector-val">{selectedFeature.properties.area_m2} m²</span></div>
+                        <div className="inspector-row"><span className="inspector-key">Threshold Tier:</span><span className="inspector-val">{selectedFeature.properties.class_name === 'removal' ? 'ΔH ≤ -5.0 m' : '-5.0m < ΔH ≤ -2.0m'}</span></div>
+                      </div>
+                    )}
+
+                    {(selectedFeature.type === 'route_terrain' || selectedFeature.type === 'route_legacy') && (
+                      <div>
+                        <div className="inspector-row"><span className="inspector-key">Route Model:</span><span className="inspector-val">{selectedFeature.properties.cost_model || 'Held-Karp TSP'}</span></div>
                         <div className="inspector-row"><span className="inspector-key">Physical Dist:</span><span className="inspector-val">{selectedFeature.properties.total_physical_distance_meters} m</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Saved vs NN:</span><span className="inspector-val" style={{ color: '#34d399' }}>-{selectedFeature.properties.distance_saved_meters} m</span></div>
+                        {selectedFeature.properties.total_travel_time_minutes && (
+                          <div className="inspector-row"><span className="inspector-key">Travel Time:</span><span className="inspector-val">{selectedFeature.properties.total_travel_time_minutes} min</span></div>
+                        )}
                         <div className="inspector-row"><span className="inspector-key">Stops Count:</span><span className="inspector-val">{selectedFeature.properties.stops_count}</span></div>
                         <div className="inspector-row"><span className="inspector-key">Grid Model:</span><span className="inspector-val">{selectedFeature.properties.grid_dimensions} ({selectedFeature.properties.grid_resolution_meters}m)</span></div>
                       </div>
@@ -900,7 +1203,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div style={{ fontSize: '10.5px', color: '#64748b', fontStyle: 'italic', padding: '10px', background: '#07130d', borderRadius: '6px', border: '1px solid #143624' }}>
-                    Click on any tree marker, verification stop, route, or fire hotspot on the map to inspect spatial attributes.
+                    Click on any tree marker, verification stop, health grid cell, degradation zone, or route on the map to inspect spatial attributes.
                   </div>
                 )}
               </div>
@@ -941,12 +1244,12 @@ export default function App() {
 
                 <div className="source-item">
                   <div className="source-name">NEON Airborne Observation Platform</div>
-                  <div>Ordway-Swisher Biological Station (OSBS) • 10 cm/pixel RGB orthomosaic & LiDAR survey data.</div>
+                  <div>Ordway-Swisher Biological Station (OSBS) • 10 cm/pixel RGB & LiDAR CHM/DTM survey data.</div>
                 </div>
 
                 <div className="source-item">
-                  <div className="source-name">DeepForest 2.1 & Held-Karp TSP</div>
-                  <div>Deep learning tree canopy segmentation + exact Dijkstra least-cost open-path routing.</div>
+                  <div className="source-name">DeepForest 2.1 & Tobler Terrain TSP</div>
+                  <div>Deep learning tree crown detection + exact Held-Karp slope-and-canopy least-cost pathing.</div>
                 </div>
 
                 <div className="source-item">
@@ -959,7 +1262,7 @@ export default function App() {
             {/* HONESTY FOOTER */}
             <div className="honesty-footer">
               <div className="honesty-title">VanDrishti System Integrity</div>
-              <div>All 684 tree canopies, 13 priority targets, and 432.1m LCP route are calculated directly from authentic NEON & NASA geospatial layers.</div>
+              <div>All {stats.totalTrees} LiDAR-validated canopies, {stats.totalHealthCells} health cells, and {stats.terrainDist}m terrain route are computed directly from authentic NEON & NASA geospatial layers.</div>
             </div>
           </div>
         </div>

@@ -12,7 +12,7 @@ from ultralytics import YOLO
 
 
 def main():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     dataset_yaml = project_root / "data" / "processed" / "yolo" / "dataset.yaml"
     results_dir = project_root / "results" / "yolov8"
     test_dir = project_root / "data" / "processed" / "yolo" / "images" / "test"

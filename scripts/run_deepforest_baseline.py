@@ -11,7 +11,7 @@ from deepforest.main import deepforest
 
 
 def run_baseline():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     test_dir = project_root / "data" / "processed" / "yolo" / "images" / "test"
     results_dir = project_root / "results" / "deepforest"
     results_dir.mkdir(parents=True, exist_ok=True)

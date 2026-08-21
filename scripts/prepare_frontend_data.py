@@ -11,7 +11,7 @@ import geopandas as gpd
 
 
 def prepare_frontend_data():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     frontend_data_dirs = [
         project_root / "frontend" / "public" / "data",
         project_root / "frontend" / "data",

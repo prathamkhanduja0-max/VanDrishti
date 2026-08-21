@@ -65,7 +65,7 @@ def visualize_yolo_annotation(
 
 
 def main():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     image_path = project_root / "data" / "processed" / "yolo" / "images" / "test" / "OSBS_022_2019.tif"
     label_path = project_root / "data" / "processed" / "yolo" / "labels" / "test" / "OSBS_022_2019.txt"
     output_path = project_root / "data" / "processed" / "yolo" / "visual_checks" / "OSBS_022_2019_check.png"

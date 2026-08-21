@@ -216,8 +216,8 @@ def process_and_save_results(
         fontweight="bold",
         pad=12
     )
-    ax.set_xlabel("UTM Easting (m) [EPSG:32617]", fontsize=11)
-    ax.set_ylabel("UTM Northing (m) [EPSG:32617]", fontsize=11)
+    ax.set_xlabel(f"UTM Easting (m) [{crs}]", fontsize=11)
+    ax.set_ylabel(f"UTM Northing (m) [{crs}]", fontsize=11)
     ax.set_xlim(left, right)
     ax.set_ylim(bottom, top)
     ax.grid(True, linestyle=":", alpha=0.35, color="white")
@@ -232,7 +232,7 @@ def process_and_save_results(
 
 
 def main():
-    project_root = Path("C:/VanDrishtiProject")
+    project_root = Path(__file__).resolve().parent.parent
     src_1km_tif = project_root / "data" / "raw" / "neon" / "large" / "2019_OSBS_5_407000_3283000_image.tif"
     dst_crop_tif = project_root / "data" / "raw" / "neon" / "large" / "OSBS_large_2019.tif"
     out_geojson = project_root / "results" / "gis" / "OSBS_large_2019_trees.geojson"
@@ -277,7 +277,7 @@ def main():
     print(f"  - Mean Confidence:       {mean_conf:.4f}")
     print(f"  - Conf >= 0.50 Count:    {count_above_50} ({count_above_50/total_trees*100:.1f}%)")
     print(f"Coordinate & CRS Validation:")
-    print(f"  - CRS:                   {crs} (EPSG:32617)")
+    print(f"  - CRS:                   {crs}")
     print(f"  - Window Easting Bounds: [{left:.1f}, {right:.1f}] -> Detected Range: [{easting_min:.1f}, {easting_max:.1f}]")
     print(f"  - Window Northing Bounds:[{bottom:.1f}, {top:.1f}] -> Detected Range: [{northing_min:.1f}, {northing_max:.1f}]")
     print(f"  - Coordinates In-Bounds: {left <= easting_min <= easting_max <= right and bottom <= northing_min <= northing_max <= top}")

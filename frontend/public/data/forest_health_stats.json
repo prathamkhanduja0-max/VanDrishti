@@ -1,0 +1,21 @@
+{
+  "cell_size_m": 25.0,
+  "grid_shape": [
+    10,
+    10
+  ],
+  "weights": {
+    "cover": 0.3,
+    "diversity": 0.3,
+    "degradation": 0.4
+  },
+  "score_mean": 60.34,
+  "score_std": 15.47,
+  "score_median": 64.57,
+  "sensitivity": {
+    "equal_weights": 0.987,
+    "cover_only": 0.464,
+    "diversity_only": 0.192,
+    "degradation_only": 0.682
+  }
+}
