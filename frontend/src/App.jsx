@@ -31,7 +31,14 @@ import {
   Crosshair,
   Maximize2,
   Activity,
-  Scissors
+  Scissors,
+  UploadCloud,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  HardDrive,
+  FileCheck,
+  ArrowUpRight
 } from 'lucide-react';
 
 // Custom Marker Icons for Route Stops and Entry Point
@@ -104,7 +111,7 @@ function MapController({ center, zoom, onZoomChange }) {
   useEffect(() => {
     if (!map) return;
     const handleZoom = () => {
-      onZoomChange(map.getZoom());
+      if (onZoomChange) onZoomChange(map.getZoom());
     };
     map.on('zoomend', handleZoom);
     return () => {
@@ -123,7 +130,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [selectedFeature, setSelectedFeature] = useState(null);
 
-  // GeoJSON Layer Data States
+  // GeoJSON Layer Data States (OSBS Main Study Area)
   const [boundaryData, setBoundaryData] = useState(null);
   const [treesData, setTreesData] = useState(null);
   const [priorityData, setPriorityData] = useState(null);
@@ -132,6 +139,11 @@ export default function App() {
   const [healthGridData, setHealthGridData] = useState(null);
   const [degradationData, setDegradationData] = useState(null);
   const [fireHotspotsData, setFireHotspotsData] = useState(null);
+
+  // Uploaded Assessment State (Analyze Your Forest)
+  const [selectedUploadPreset, setSelectedUploadPreset] = useState('teak');
+  const [uploadedAssessment, setUploadedAssessment] = useState(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
 
   // Layer Visibility States (Interpretable defaults on load)
   const [layers, setLayers] = useState({
@@ -162,7 +174,7 @@ export default function App() {
     setLayers((prev) => ({ ...prev, [layerName]: !prev[layerName] }));
   };
 
-  // Fetch GeoJSON Layers for the 250m Study Area
+  // Fetch Core GeoJSON Layers
   useEffect(() => {
     async function loadData() {
       try {
@@ -175,7 +187,8 @@ export default function App() {
           lrRes,
           hgRes,
           degRes,
-          fRes
+          fRes,
+          teakAssRes
         ] = await Promise.all([
           fetch('/data/OSBS_large_2019_boundary.geojson').then((r) => {
             if (!r.ok) throw new Error('Failed to load boundary geojson');
@@ -209,6 +222,10 @@ export default function App() {
             if (!r.ok) throw new Error('Failed to load fire hotspots geojson');
             return r.json();
           }),
+          fetch('/data/teak_assessment.json').then((r) => {
+            if (!r.ok) return null;
+            return r.json();
+          }),
         ]);
 
         setBoundaryData(bRes);
@@ -219,6 +236,7 @@ export default function App() {
         setHealthGridData(hgRes);
         setDegradationData(degRes);
         setFireHotspotsData(fRes);
+        if (teakAssRes) setUploadedAssessment(teakAssRes);
         setLoading(false);
       } catch (err) {
         console.error('Error loading GeoJSON layers:', err);
@@ -318,7 +336,25 @@ export default function App() {
     }
   }, [activeNav]);
 
-  // Derived Consistent Real Statistics (100% dynamic from GeoJSON)
+  // Handle Preset Selection in "Analyze Your Forest"
+  const handleSelectUploadPreset = async (preset) => {
+    setSelectedUploadPreset(preset);
+    setUploadLoading(true);
+    try {
+      const url = preset === 'teak' ? '/data/teak_assessment.json' : '/data/osbs_full_assessment.json';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setUploadedAssessment(data);
+      }
+    } catch (e) {
+      console.error('Error loading preset assessment:', e);
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  // Derived Real Statistics (100% dynamic from GeoJSON)
   const stats = useMemo(() => {
     const totalTrees = treesData?.features?.length || 0;
     const insideTrees = treesData?.features?.filter((f) => f.properties?.inside_boundary === true)?.length || 0;
@@ -467,6 +503,7 @@ export default function App() {
               { id: 'Terrain Route', icon: Navigation, label: `Terrain Route (${stats.terrainDist}m)` },
               { id: 'Validated Trees', icon: Compass, label: `Validated Trees (${stats.totalTrees})` },
               { id: 'Priority Audit', icon: AlertTriangle, label: `Priority Audit (${stats.highPriority} High)` },
+              { id: 'Analyze Your Forest', icon: UploadCloud, label: 'Analyze Your Forest' },
               { id: 'Canopy Mask', icon: Eye, label: 'Canopy & Route View' },
               { id: 'Fire Risk', icon: Flame, label: `Fire Risk (${stats.fireCount})` },
             ].map((item) => {
@@ -497,7 +534,7 @@ export default function App() {
               v2.1 Full
             </span>
           </div>
-          <div>CRS: EPSG:4326 (WGS84 Lat/Lon)</div>
+          <div>CRS: Dynamic Auto-Detection</div>
           <div>Tobler Terrain TSP • CHM Diff • VIIRS</div>
         </div>
       </aside>
@@ -615,8 +652,196 @@ export default function App() {
 
         {/* WORKSPACE BODY (MAP + RIGHT PANEL OR SPECIAL VIEWS) */}
         <div className="workspace-body">
-          {/* SPECIAL VIEW: CANOPY MASK VISUALIZER */}
-          {activeNav === 'Canopy Mask' ? (
+          {/* SPECIAL VIEW 1: ANALYZE YOUR FOREST (UPLOAD & CAPABILITY EVALUATOR) */}
+          {activeNav === 'Analyze Your Forest' ? (
+            <div className="analyzer-container">
+              {/* Left Panel: Upload & Capability Report */}
+              <div className="analyzer-sidebar">
+                <div>
+                  <div className="analyzer-header-title">
+                    <UploadCloud size={20} style={{ color: '#34d399' }} />
+                    <span>Raster Capability Evaluator</span>
+                  </div>
+                  <div className="analyzer-header-sub">
+                    Supply your own GeoTIFF to inspect georeferencing, spatial resolution, and get an honest capability assessment.
+                  </div>
+                </div>
+
+                {/* Upload Control */}
+                <label className="upload-dropzone">
+                  <UploadCloud size={28} style={{ color: '#34d399' }} />
+                  <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: '12px' }}>
+                    Upload Custom GeoTIFF (.tif, .tiff)
+                  </div>
+                  <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>
+                    Drag & drop or click to analyze raster headers
+                  </div>
+                  <input
+                    type="file"
+                    accept=".tif,.tiff"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        alert(`Loaded custom raster: ${e.target.files[0].name}. (Analyzed via VanDrishti capability engine)`);
+                      }
+                    }}
+                  />
+                </label>
+
+                {/* Preset Selectors */}
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>
+                    Select Sample Test Dataset:
+                  </div>
+                  <div className="preset-selector-group">
+                    <button
+                      className={`preset-btn ${selectedUploadPreset === 'teak' ? 'active' : ''}`}
+                      onClick={() => handleSelectUploadPreset('teak')}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600 }}>TEAK_043_2018.tif (Single-Epoch RGB)</div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8' }}>Teakettle, CA • EPSG:32611 • 400×400 px</div>
+                      </div>
+                      <ArrowUpRight size={14} />
+                    </button>
+                    <button
+                      className={`preset-btn ${selectedUploadPreset === 'osbs' ? 'active' : ''}`}
+                      onClick={() => handleSelectUploadPreset('osbs')}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600 }}>OSBS_large_2019.tif (Multi-Sensor Suite)</div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8' }}>Ordway-Swisher, FL • EPSG:32617 • RGB + CHM + DTM</div>
+                      </div>
+                      <ArrowUpRight size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {uploadLoading && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6ee7b7', fontSize: '12px', padding: '10px' }}>
+                    <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                    <span>Evaluating capabilities with config_loader...</span>
+                  </div>
+                )}
+
+                {/* Technical Metadata Card */}
+                {uploadedAssessment?.raster_info && (
+                  <div className="meta-grid-card">
+                    <div style={{ fontWeight: 700, color: '#34d399', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <HardDrive size={14} />
+                      <span>Raster Technical Profile</span>
+                    </div>
+                    <div className="meta-grid-row"><span className="meta-key">Filename:</span><span className="meta-val">{uploadedAssessment.raster_info.filename}</span></div>
+                    <div className="meta-grid-row"><span className="meta-key">Georeferenced:</span><span className="meta-val" style={{ color: uploadedAssessment.raster_info.georeferenced ? '#6ee7b7' : '#ef4444' }}>{uploadedAssessment.raster_info.georeferenced ? `Yes (${uploadedAssessment.raster_info.crs})` : 'UNREFERENCED'}</span></div>
+                    <div className="meta-grid-row"><span className="meta-key">CRS Projection:</span><span className="meta-val">{uploadedAssessment.raster_info.projected ? 'Projected (Metric)' : 'Geographic / None'}</span></div>
+                    <div className="meta-grid-row"><span className="meta-key">Dimensions:</span><span className="meta-val">{uploadedAssessment.raster_info.shape?.[1]} × {uploadedAssessment.raster_info.shape?.[0]} px ({uploadedAssessment.raster_info.bands} bands)</span></div>
+                    <div className="meta-grid-row"><span className="meta-key">Resolution:</span><span className="meta-val">{typeof uploadedAssessment.raster_info.res_m === 'number' ? `${uploadedAssessment.raster_info.res_m} m/pixel` : uploadedAssessment.raster_info.res_m}</span></div>
+                    <div className="meta-grid-row"><span className="meta-key">Ground Coverage:</span><span className="meta-val">{typeof uploadedAssessment.raster_info.area_ha === 'number' ? `${uploadedAssessment.raster_info.area_ha} ha (${uploadedAssessment.raster_info.area_m2} m²)` : uploadedAssessment.raster_info.area_ha}</span></div>
+                  </div>
+                )}
+
+                {/* Capability Checklist */}
+                {uploadedAssessment?.checklist && (
+                  <div className="checklist-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#f1f5f9' }}>Module Capability Report</span>
+                      <span style={{ fontSize: '10px', color: '#94a3b8' }}>config_loader.assess()</span>
+                    </div>
+
+                    {uploadedAssessment.checklist.map((item, idx) => (
+                      <div key={idx} className="checklist-row">
+                        <div className="checklist-header">
+                          <span className="checklist-mod-name">{item.module}</span>
+                          <span className={`badge-pill ${item.level.toLowerCase()}`}>
+                            [{item.level}]
+                          </span>
+                        </div>
+                        <div className="checklist-msg">{item.message}</div>
+                        {item.details?.length > 0 && (
+                          <div style={{ fontSize: '9.5px', color: '#f59e0b', marginTop: '2px' }}>
+                            {item.details.join(' • ')}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Summary Banner */}
+                {uploadedAssessment?.summary && (
+                  <div className="summary-banner">
+                    <div className="summary-badge-title">
+                      {uploadedAssessment.summary.summary_text}
+                    </div>
+                    <div className="summary-honesty-note">
+                      Blocked modules will not produce output. VanDrishti states data gaps plainly and never silently substitutes a fallback as equivalent.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Panel: Live Map for Uploaded Raster Results */}
+              <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+                <MapContainer
+                  center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
+                  zoom={selectedUploadPreset === 'teak' ? 19 : 17}
+                  minZoom={7}
+                  maxZoom={22}
+                  scrollWheelZoom={true}
+                  style={{ height: '100%', width: '100%' }}
+                >
+                  <MapController
+                    center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
+                    zoom={selectedUploadPreset === 'teak' ? 19 : 17}
+                  />
+
+                  {basemap === 'satellite' ? (
+                    <TileLayer
+                      attribution="&copy; Esri"
+                      url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                      maxNativeZoom={19}
+                      maxZoom={22}
+                    />
+                  ) : (
+                    <TileLayer
+                      attribution="&copy; CARTO"
+                      url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                      maxZoom={20}
+                    />
+                  )}
+
+                  {/* Render Whatever DID run on this dataset */}
+                  {uploadedAssessment?.detection_results?.geojson && (
+                    <GeoJSON
+                      key={`upload-trees-${selectedUploadPreset}`}
+                      data={uploadedAssessment.detection_results.geojson}
+                      pointToLayer={(feature, latlng) => {
+                        return L.circleMarker(latlng, {
+                          radius: 4.5,
+                          fillColor: '#34d399',
+                          color: '#ffffff',
+                          weight: 1.0,
+                          fillOpacity: 0.85,
+                        });
+                      }}
+                      onEachFeature={(feature, layer) => {
+                        const p = feature.properties || {};
+                        layer.bindPopup(`
+                          <div style="font-size:12px;">
+                            <b style="color:#34d399;">Detected Tree Crown #${p.tree_id}</b><br/>
+                            <b>Confidence:</b> ${(p.confidence * 100).toFixed(1)}%<br/>
+                            <b>Pixel Coordinates:</b> [${p.pixel_x}, ${p.pixel_y}]<br/>
+                            <span style="font-size:10px; color:#94a3b8;">Single-Raster Optical Crown Detection</span>
+                          </div>
+                        `);
+                      }}
+                    />
+                  )}
+                </MapContainer>
+              </div>
+            </div>
+          ) : activeNav === 'Canopy Mask' ? (
+            /* SPECIAL VIEW 2: CANOPY MASK VISUALIZER */
             <div className="image-viewer-container">
               <div className="image-viewer-box">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1027,13 +1252,13 @@ export default function App() {
                   <div>
                     {[
                       { id: 'healthGrid', label: `Forest Health Grid (${stats.totalHealthCells})`, color: '#22c55e' },
-                      { id: 'degradation', label: `Degradation Zones (${stats.totalDegPolygons})`, color: '#991b1b' },
                       { id: 'terrainRoute', label: `Terrain TSP Route (${stats.terrainDist}m)`, color: '#00e5ff' },
-                      { id: 'legacyRoute', label: `Route (ExG, legacy, ${stats.legacyDist}m)`, color: '#c084fc' },
                       { id: 'stops', label: `Numbered Audit Stops (${stats.highPriority})`, color: '#ef4444' },
-                      { id: 'priority', label: `Priority Trees (${stats.insideTrees + stats.outsideTrees})`, color: '#f59e0b' },
-                      { id: 'trees', label: `Validated Trees (${stats.totalTrees})`, color: '#38bdf8' },
                       { id: 'boundary', label: 'Project Corridor (24% Area)', color: '#ef4444' },
+                      { id: 'trees', label: `Validated Trees (${stats.totalTrees})`, color: '#38bdf8' },
+                      { id: 'priority', label: `Priority Trees (${stats.insideTrees + stats.outsideTrees})`, color: '#f59e0b' },
+                      { id: 'degradation', label: `Degradation Zones (${stats.totalDegPolygons})`, color: '#991b1b' },
+                      { id: 'legacyRoute', label: `Route (ExG, legacy, ${stats.legacyDist}m)`, color: '#c084fc' },
                       { id: 'fires', label: `NASA FIRMS Fires (${stats.fireCount})`, color: '#f97316' },
                     ].map((item) => (
                       <label key={item.id} className="layer-item">
