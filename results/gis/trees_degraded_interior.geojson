@@ -1,0 +1,10 @@
+{
+"type": "FeatureCollection",
+"name": "trees_degraded_interior",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::32617" } },
+"features": [
+{ "type": "Feature", "properties": { "tree_id": 664, "label": "Tree", "confidence": 0.5049, "pixel_xmin": 172.0, "pixel_ymin": 156.0, "pixel_xmax": 210.0, "pixel_ymax": 196.0, "pixel_center_x": 191.0, "pixel_center_y": 176.0, "geo_easting": 407719.15, "geo_northing": 3283982.35, "chm_height_m": 14.35, "dh": -14.569999694824219, "grad": 1.7892038161257806 }, "geometry": { "type": "Point", "coordinates": [ 407719.150000000023283, 3283982.35 ] } },
+{ "type": "Feature", "properties": { "tree_id": 1177, "label": "Tree", "confidence": 0.4045, "pixel_xmin": 0.0, "pixel_ymin": 2419.0, "pixel_xmax": 8.0, "pixel_ymax": 2445.0, "pixel_center_x": 4.0, "pixel_center_y": 2432.0, "geo_easting": 407700.45, "geo_northing": 3283756.75, "chm_height_m": 13.75, "dh": -10.069999694824219, "grad": 1.7067587719529049 }, "geometry": { "type": "Point", "coordinates": [ 407700.450000000011642, 3283756.75 ] } },
+{ "type": "Feature", "properties": { "tree_id": 1859, "label": "Tree", "confidence": 0.2559, "pixel_xmin": 1670.0, "pixel_ymin": 207.0, "pixel_xmax": 1697.0, "pixel_ymax": 236.0, "pixel_center_x": 1683.5, "pixel_center_y": 221.5, "geo_easting": 407868.4, "geo_northing": 3283977.8, "chm_height_m": 15.14, "dh": -5.7650003433227539, "grad": 1.801562005048772 }, "geometry": { "type": "Point", "coordinates": [ 407868.400000000023283, 3283977.799999999813735 ] } }
+]
+}

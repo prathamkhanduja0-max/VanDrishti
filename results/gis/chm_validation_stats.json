@@ -1,0 +1,63 @@
+{
+  "input": 1998,
+  "kept": 1979,
+  "dropped": 19,
+  "dropped_pct": 0.95,
+  "outside_chm_extent": 0,
+  "min_height_m": 2.0,
+  "radius_m": 1.5,
+  "height_median_m": 12.84,
+  "height_p95_m": 18.26,
+  "calibration_by_confidence": [
+    {
+      "conf_range": [
+        0.111,
+        0.319
+      ],
+      "n": 400,
+      "height_mean_m": 11.93,
+      "height_median_m": 12.56,
+      "pct_under_2m": 3.5
+    },
+    {
+      "conf_range": [
+        0.319,
+        0.401
+      ],
+      "n": 399,
+      "height_mean_m": 12.57,
+      "height_median_m": 12.6,
+      "pct_under_2m": 0.8
+    },
+    {
+      "conf_range": [
+        0.401,
+        0.475
+      ],
+      "n": 400,
+      "height_mean_m": 12.45,
+      "height_median_m": 12.27,
+      "pct_under_2m": 0.0
+    },
+    {
+      "conf_range": [
+        0.475,
+        0.575
+      ],
+      "n": 399,
+      "height_mean_m": 12.98,
+      "height_median_m": 12.81,
+      "pct_under_2m": 0.3
+    },
+    {
+      "conf_range": [
+        0.575,
+        0.887
+      ],
+      "n": 400,
+      "height_mean_m": 13.88,
+      "height_median_m": 13.93,
+      "pct_under_2m": 0.2
+    }
+  ]
+}

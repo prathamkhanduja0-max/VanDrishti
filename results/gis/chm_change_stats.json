@@ -1,0 +1,33 @@
+{
+  "valid_pixels": 62500,
+  "pixel_area_m2": 1.0,
+  "dh_mean_m": -0.262,
+  "dh_median_m": 0.0,
+  "dh_std_m": 2.161,
+  "h1_median_m": 9.27,
+  "h2_median_m": 9.08,
+  "classes": {
+    "removal": {
+      "pixels": 1941,
+      "area_m2": 1941.0,
+      "pct": 3.11
+    },
+    "thinning": {
+      "pixels": 1941,
+      "area_m2": 1941.0,
+      "pct": 3.11
+    },
+    "stable": {
+      "pixels": 56732,
+      "area_m2": 56732.0,
+      "pct": 90.77
+    },
+    "growth": {
+      "pixels": 1886,
+      "area_m2": 1886.0,
+      "pct": 3.02
+    }
+  },
+  "loss_polygons": 105,
+  "loss_polygon_area_m2": 510.0
+}
