@@ -1,0 +1,383 @@
+{
+  "site_context": {
+    "site_id": "TEAK_043_2018",
+    "site_name": "Teakettle (TEAK), Sierra Nevada CA",
+    "study_tile_label": "Secondary Validation Dataset (TEAK_043)",
+    "study_tile_area_ha": 0.16,
+    "crs_processing": "EPSG:32611 (UTM Zone 11N)",
+    "crs_webgis": "EPSG:4326 (WGS84)",
+    "data_provenance": {
+      "rgb_source": "2018 NEON AOP Airborne RGB",
+      "chm_source": "2018 NEON LiDAR CHM",
+      "fire_source": "N/A (Historical Test Area)",
+      "routing_source": "Tobler DTM + LCP Dijkstra"
+    },
+    "acquisition_dates": {
+      "rgb": "2018 NEON AOP",
+      "lidar_baseline": "2018 NEON LiDAR",
+      "lidar_current": "2018 NEON LiDAR",
+      "fire": "N/A"
+    }
+  },
+  "provenance": {
+    "tree_detection": {
+      "status": "AVAILABLE",
+      "source": "2018 NEON AOP Airborne RGB",
+      "freshness": "2018 NEON AOP"
+    },
+    "lidar_validation": {
+      "status": "AVAILABLE",
+      "source": "2018 NEON LiDAR CHM",
+      "freshness": "2018 NEON LiDAR"
+    },
+    "health_grid": {
+      "status": "UNAVAILABLE",
+      "source": "N/A",
+      "freshness": "Historical LiDAR Composite (2018/2019)"
+    },
+    "degradation": {
+      "status": "UNAVAILABLE",
+      "source": "N/A",
+      "freshness": "Multi-Temporal LiDAR CHM (2018 vs 2019)"
+    },
+    "fire_monitoring": {
+      "status": "LIVE_REAL_TIME",
+      "source": "VIIRS_SNPP_NRT (Cached Fallback)",
+      "freshness": "N/A"
+    },
+    "field_routing": {
+      "status": "AVAILABLE",
+      "source": "Tobler DTM + LCP Dijkstra",
+      "freshness": "Calculated Real-Time from Current Inventory"
+    }
+  },
+  "capabilities": {
+    "detection": "FULL",
+    "validation": "FULL",
+    "priority": "FULL",
+    "health_score": "UNAVAILABLE",
+    "degradation": "UNAVAILABLE",
+    "fire": "FULL",
+    "routing": "FULL"
+  },
+  "statutory_disclaimer": "Decision Support & Verification Evidence Only. Does not replace statutory environmental clearances.",
+  "summary": {
+    "corridor_area_sq_m": 448.73,
+    "corridor_coverage_pct": 28.05,
+    "raw_trees_count": 24,
+    "validated_trees_count": 24,
+    "operational_inventory_count": 24,
+    "impacted_trees_count": 7,
+    "outside_trees_count": 17,
+    "impacted_pct": 29.17,
+    "high_priority_count": 7,
+    "medium_priority_count": 17,
+    "low_priority_count": 0,
+    "impacted_high_priority_count": 7,
+    "impacted_medium_priority_count": 0,
+    "impacted_low_priority_count": 0,
+    "total_health_cells": 0,
+    "health_grade_a": 0,
+    "health_grade_b": 0,
+    "health_grade_c": 0,
+    "health_grade_d": 0,
+    "total_degradation_polygons": 0,
+    "degradation_removal_count": 0,
+    "degradation_thinning_count": 0,
+    "fire_hotspots_count": 11,
+    "field_route_distance_m": 62.8,
+    "field_route_time_min": 0.0,
+    "field_route_stops_count": 7
+  },
+  "inventory_sample": [
+    {
+      "tree_id": 1,
+      "longitude": -119.011256,
+      "latitude": 36.999711,
+      "utm_easting": 321035.5,
+      "utm_northing": 4096731.1,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 2,
+      "longitude": -119.011136,
+      "latitude": 36.999645,
+      "utm_easting": 321046.0,
+      "utm_northing": 4096723.6,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "INSIDE",
+      "priority": "HIGH",
+      "rationale": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)"
+    },
+    {
+      "tree_id": 3,
+      "longitude": -119.011148,
+      "latitude": 36.999851,
+      "utm_easting": 321045.4,
+      "utm_northing": 4096746.5,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 4,
+      "longitude": -119.011245,
+      "latitude": 36.999621,
+      "utm_easting": 321036.2,
+      "utm_northing": 4096721.0,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 5,
+      "longitude": -119.010846,
+      "latitude": 36.999863,
+      "utm_easting": 321072.3,
+      "utm_northing": 4096747.1,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "INSIDE",
+      "priority": "HIGH",
+      "rationale": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)"
+    },
+    {
+      "tree_id": 6,
+      "longitude": -119.011064,
+      "latitude": 36.99956,
+      "utm_easting": 321052.2,
+      "utm_northing": 4096714.0,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 7,
+      "longitude": -119.011215,
+      "latitude": 36.999548,
+      "utm_easting": 321038.8,
+      "utm_northing": 4096712.9,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "INSIDE",
+      "priority": "HIGH",
+      "rationale": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)"
+    },
+    {
+      "tree_id": 8,
+      "longitude": -119.011114,
+      "latitude": 36.99978,
+      "utm_easting": 321048.2,
+      "utm_northing": 4096738.5,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 9,
+      "longitude": -119.011046,
+      "latitude": 36.999582,
+      "utm_easting": 321053.8,
+      "utm_northing": 4096716.4,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 10,
+      "longitude": -119.011093,
+      "latitude": 36.999565,
+      "utm_easting": 321049.6,
+      "utm_northing": 4096714.6,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 11,
+      "longitude": -119.011078,
+      "latitude": 36.999612,
+      "utm_easting": 321051.0,
+      "utm_northing": 4096719.8,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "INSIDE",
+      "priority": "HIGH",
+      "rationale": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)"
+    },
+    {
+      "tree_id": 12,
+      "longitude": -119.010855,
+      "latitude": 36.999553,
+      "utm_easting": 321070.8,
+      "utm_northing": 4096712.8,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 13,
+      "longitude": -119.010881,
+      "latitude": 36.999551,
+      "utm_easting": 321068.5,
+      "utm_northing": 4096712.6,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 14,
+      "longitude": -119.011151,
+      "latitude": 36.999775,
+      "utm_easting": 321044.9,
+      "utm_northing": 4096738.0,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 15,
+      "longitude": -119.011104,
+      "latitude": 36.999879,
+      "utm_easting": 321049.3,
+      "utm_northing": 4096749.4,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 16,
+      "longitude": -119.010945,
+      "latitude": 36.999783,
+      "utm_easting": 321063.3,
+      "utm_northing": 4096738.5,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "INSIDE",
+      "priority": "HIGH",
+      "rationale": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)"
+    },
+    {
+      "tree_id": 17,
+      "longitude": -119.011119,
+      "latitude": 36.999556,
+      "utm_easting": 321047.3,
+      "utm_northing": 4096713.7,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 18,
+      "longitude": -119.011164,
+      "latitude": 36.999594,
+      "utm_easting": 321043.3,
+      "utm_northing": 4096717.9,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "INSIDE",
+      "priority": "HIGH",
+      "rationale": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)"
+    },
+    {
+      "tree_id": 19,
+      "longitude": -119.0112,
+      "latitude": 36.99972,
+      "utm_easting": 321040.5,
+      "utm_northing": 4096732.0,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 20,
+      "longitude": -119.011226,
+      "latitude": 36.999795,
+      "utm_easting": 321038.3,
+      "utm_northing": 4096740.4,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 21,
+      "longitude": -119.010839,
+      "latitude": 36.999806,
+      "utm_easting": 321072.8,
+      "utm_northing": 4096740.9,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 22,
+      "longitude": -119.011015,
+      "latitude": 36.999775,
+      "utm_easting": 321057.0,
+      "utm_northing": 4096737.8,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 23,
+      "longitude": -119.011054,
+      "latitude": 36.999753,
+      "utm_easting": 321053.5,
+      "utm_northing": 4096735.4,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "OUTSIDE",
+      "priority": "MEDIUM",
+      "rationale": "Outside corridor with moderate confidence [Conf: 85.0%]"
+    },
+    {
+      "tree_id": 24,
+      "longitude": -119.011006,
+      "latitude": 36.999712,
+      "utm_easting": 321057.7,
+      "utm_northing": 4096730.8,
+      "confidence": 0.85,
+      "chm_height_m": 0.0,
+      "corridor_status": "INSIDE",
+      "priority": "HIGH",
+      "rationale": "Inside project corridor (corridor impact) & Low-tier confidence (mandatory ground audit)"
+    }
+  ],
+  "funnel_explanation": "24 raw predictions \u2192 24 LiDAR validated \u2192 24 confidence-filtered operational inventory"
+}

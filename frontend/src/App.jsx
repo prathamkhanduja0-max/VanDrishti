@@ -48,12 +48,14 @@ import {
   X,
   Plus,
   LogOut,
-  Download
+  Download,
+  ShieldCheck
 } from 'lucide-react';
 import { computePointToPointPath } from './utils/dijkstra';
 import { apiService } from './services/api';
 import { useAuth } from './context/AuthContext';
 import LoginPage from './components/LoginPage';
+import { DiversionAssessmentView } from './components/DiversionAssessmentView';
 
 
 // Custom Marker Icons for Route Stops and Entry Point
@@ -253,8 +255,18 @@ function AppDashboard({ user, logout }) {
 
   // Uploaded Assessment State (Analyze Your Forest)
   const [selectedUploadPreset, setSelectedUploadPreset] = useState('teak');
+  const [currentSite, setCurrentSite] = useState('OSBS_large_2019');
   const [uploadedAssessment, setUploadedAssessment] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
+
+  const triggerDownload = (url) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   // Layer Visibility States (Interpretable defaults on load)
   const [layers, setLayers] = useState({
@@ -820,6 +832,7 @@ function AppDashboard({ user, logout }) {
               { id: 'Terrain Route', icon: Navigation, label: `Terrain Route (${stats.terrainDist}m)` },
               { id: 'Validated Trees', icon: Compass, label: `Validated Trees (${stats.totalTrees})` },
               { id: 'Priority Audit', icon: AlertTriangle, label: `Priority Audit (${stats.highPriority} High)` },
+              { id: 'Diversion Assessment', icon: ShieldCheck, label: 'Diversion Assessment' },
               { id: 'Analyze Your Forest', icon: UploadCloud, label: 'Analyze Your Forest' },
               { id: 'Canopy Mask', icon: Eye, label: 'Canopy & Route View' },
               { id: 'Fire Risk', icon: Flame, label: `Fire Risk (${stats.fireCount})` },
@@ -923,17 +936,17 @@ function AppDashboard({ user, logout }) {
 
             <div className="report-download-group">
               <button
-                onClick={() => window.open('/api/report/OSBS_large_2019?format=pdf', '_blank')}
+                onClick={() => triggerDownload(`/api/diversion/export/pdf?site=${encodeURIComponent(currentSite)}`)}
                 className="report-download-btn pdf"
-                title="Download Full OSBS Area Intelligence Report (PDF)"
+                title="Download Site Intelligence Report (PDF)"
               >
                 <FileText size={12} style={{ color: 'var(--vd-deep)' }} />
                 <span>Report PDF</span>
               </button>
               <button
-                onClick={() => window.open('/api/report/OSBS_large_2019?format=csv', '_blank')}
+                onClick={() => triggerDownload(`/api/diversion/export/csv?site=${encodeURIComponent(currentSite)}`)}
                 className="report-download-btn csv"
-                title="Download OSBS Area Intelligence Data (CSV)"
+                title="Download Site Tree Inventory Data (CSV)"
               >
                 <Download size={12} style={{ color: 'var(--vd-deep)' }} />
                 <span>CSV</span>
@@ -1062,8 +1075,9 @@ function AppDashboard({ user, logout }) {
 
         {/* WORKSPACE BODY (MAP + RIGHT PANEL OR SPECIAL VIEWS) */}
         <div className="workspace-body">
-          {/* SPECIAL VIEW 1: ANALYZE YOUR FOREST (UPLOAD & CAPABILITY EVALUATOR) */}
-          {activeNav === 'Analyze Your Forest' ? (
+          {activeNav === 'Diversion Assessment' ? (
+            <DiversionAssessmentView currentSite={currentSite} />
+          ) : activeNav === 'Analyze Your Forest' ? (
             <div className="analyzer-container">
               {/* Left Panel: Upload & Capability Report */}
               <div className="analyzer-sidebar">
