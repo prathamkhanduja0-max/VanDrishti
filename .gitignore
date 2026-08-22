@@ -59,6 +59,7 @@ venv.bak/
 lightning_logs/
 backend/lightning_logs/
 version_*/
+.hf_cache/
 
 # Node & Frontend
 node_modules/

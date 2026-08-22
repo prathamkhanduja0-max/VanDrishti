@@ -36,6 +36,11 @@ try:
 except ImportError:
     pass
 
+_cache = Path(__file__).resolve().parent.parent / ".hf_cache"
+_cache.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("HF_HOME", str(_cache))
+os.environ.setdefault("HUGGINGFACE_HUB_CACHE", str(_cache / "hub"))
+
 import numpy as np
 import rasterio
 from rasterio.transform import xy
