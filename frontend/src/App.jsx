@@ -7,6 +7,7 @@ import {
   Marker,
   Pane,
   Polyline,
+  ImageOverlay,
   useMap,
   useMapEvents
 } from 'react-leaflet';
@@ -46,7 +47,8 @@ import {
   RotateCcw,
   X,
   Plus,
-  LogOut
+  LogOut,
+  Download
 } from 'lucide-react';
 import { computePointToPointPath } from './utils/dijkstra';
 import { apiService } from './services/api';
@@ -189,6 +191,17 @@ function MapInvalidateResizer({ trigger }) {
   return null;
 }
 
+// Automatically fits map viewport to uploaded raster bounds
+function MapBoundsFitter({ bounds }) {
+  const map = useMap();
+  useEffect(() => {
+    if (bounds && Array.isArray(bounds) && bounds.length === 2 && map) {
+      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 20 });
+    }
+  }, [map, bounds]);
+  return null;
+}
+
 export default function App() {
   const { user, loading: authLoading, logout } = useAuth();
 
@@ -229,6 +242,7 @@ function AppDashboard({ user, logout }) {
   // Cost Surfaces for Interactive Dijkstra
   const [osbsCostSurface, setOsbsCostSurface] = useState(null);
   const [teakCostSurface, setTeakCostSurface] = useState(null);
+  const [activeCostSurface, setActiveCostSurface] = useState(null);
 
   // Point-to-Point Interactive Routing State
   const [p2pEnabled, setP2pEnabled] = useState(false);
@@ -261,12 +275,23 @@ function AppDashboard({ user, logout }) {
   const [alertsExpanded, setAlertsExpanded] = useState(true);
   const [inspectorExpanded, setInspectorExpanded] = useState(true);
   const [stopsExpanded, setStopsExpanded] = useState(true);
+  const [lastMainNav, setLastMainNav] = useState('Overview');
 
   // OSBS 250m Study Area Center in WGS84
   const mapCenter = useMemo(() => [29.681510, -81.952647], []);
   const [currentCenter, setCurrentCenter] = useState(mapCenter);
   const [currentZoom, setCurrentZoom] = useState(17);
   const [mapZoomLevel, setMapZoomLevel] = useState(17);
+
+  // Dynamic center for Analyzer / Custom Upload Map
+  const uploadMapCenter = useMemo(() => {
+    if (uploadedAssessment?.preview_bounds_wgs84 && Array.isArray(uploadedAssessment.preview_bounds_wgs84) && uploadedAssessment.preview_bounds_wgs84.length === 2) {
+      const b = uploadedAssessment.preview_bounds_wgs84;
+      return [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+    }
+    if (selectedUploadPreset === 'teak') return [37.000, -119.011];
+    return mapCenter;
+  }, [uploadedAssessment?.preview_bounds_wgs84, selectedUploadPreset, mapCenter]);
 
   const handleZoomChange = useCallback((z) => {
     setMapZoomLevel(z);
@@ -316,7 +341,10 @@ function AppDashboard({ user, logout }) {
         if (degRes) setDegradationData(degRes);
         if (fRes) setFireHotspotsData(fRes);
         if (teakAssRes) setUploadedAssessment(teakAssRes);
-        if (osbsCostRes) setOsbsCostSurface(osbsCostRes);
+        if (osbsCostRes) {
+          setOsbsCostSurface(osbsCostRes);
+          setActiveCostSurface(osbsCostRes);
+        }
         if (teakCostRes) setTeakCostSurface(teakCostRes);
         setLoading(false);
       } catch (err) {
@@ -417,18 +445,48 @@ function AppDashboard({ user, logout }) {
     }
   }, [activeNav]);
 
-  // Determine Active Cost Surface
-  const activeCostSurface = useMemo(() => {
-    if (activeNav === 'Analyze Your Forest' && selectedUploadPreset === 'teak') {
-      return teakCostSurface;
+  // Sync Default / Preset Cost Surface when switching tabs or presets
+  useEffect(() => {
+    if (activeNav === 'Analyze Your Forest') {
+      if (selectedUploadPreset === 'teak' && teakCostSurface) {
+        setActiveCostSurface(teakCostSurface);
+      } else if (selectedUploadPreset === 'osbs' && osbsCostSurface) {
+        setActiveCostSurface(osbsCostSurface);
+      }
+    } else {
+      if (osbsCostSurface) {
+        setActiveCostSurface(osbsCostSurface);
+      }
     }
-    return osbsCostSurface;
   }, [activeNav, selectedUploadPreset, osbsCostSurface, teakCostSurface]);
 
   // Handle Interactive Map Clicks for Point-to-Point Dijkstra Routing
   const handleMapPointClick = useCallback((latlng) => {
     if (!p2pEnabled) return;
     const pt = [latlng.lat, latlng.lng];
+
+    if (!activeCostSurface) {
+      setP2pError('Cost surface data not yet loaded for this area.');
+      return;
+    }
+
+    if (activeCostSurface.routable === false) {
+      setP2pError(activeCostSurface.reason || 'Active cost surface is not routable.');
+      return;
+    }
+
+    // Validate click is inside the active cost surface's WGS84 bounding box
+    const bounds = activeCostSurface.wgs84_bounds; // [minLon, minLat, maxLon, maxLat]
+    if (bounds && bounds.length === 4) {
+      const [minLon, minLat, maxLon, maxLat] = bounds;
+      const lat = latlng.lat;
+      const lon = latlng.lng;
+      if (lon < minLon || lon > maxLon || lat < minLat || lat > maxLat) {
+        const surfName = activeCostSurface.name || 'the uploaded raster area';
+        setP2pError(`Click inside the uploaded area (${surfName}) to set routing points.`);
+        return;
+      }
+    }
 
     if (!p2pStart || (p2pStart && p2pEnd)) {
       // First click -> Start Point A
@@ -440,10 +498,14 @@ function AppDashboard({ user, logout }) {
       // Second click -> End Point B + Execute Dijkstra!
       setP2pEnd(pt);
       try {
-        if (!activeCostSurface) {
-          throw new Error('Cost surface data not yet loaded for this area.');
-        }
         const result = computePointToPointPath(activeCostSurface, p2pStart, pt);
+        console.log('[VanDrishti Dijkstra] Solved Route:', {
+          surface: activeCostSurface.name,
+          startGrid: result.start_grid,
+          endGrid: result.end_grid,
+          distanceMeters: result.distance_meters,
+          travelTimeMinutes: result.travel_time_minutes,
+        });
         setP2pRouteResult(result);
         setP2pError(null);
       } catch (err) {
@@ -470,9 +532,13 @@ function AppDashboard({ user, logout }) {
       if (assessmentData) {
         setUploadedAssessment(assessmentData);
       }
-      const costData = await apiService.getCostSurface(preset);
-      if (costData) {
-        setActiveCostSurface(costData);
+      try {
+        const costData = await apiService.getCostSurface(preset);
+        if (costData) {
+          setActiveCostSurface(costData);
+        }
+      } catch (costErr) {
+        console.warn('Cost surface unavailable for preset:', costErr);
       }
     } catch (e) {
       console.error('Error loading preset assessment via API:', e);
@@ -480,7 +546,6 @@ function AppDashboard({ user, logout }) {
       setUploadLoading(false);
     }
   };
-
 
   // Handle Real File Upload in "Analyze Your Forest"
   const handleFileUpload = async (event) => {
@@ -495,22 +560,68 @@ function AppDashboard({ user, logout }) {
 
     try {
       const res = await apiService.uploadDataset(file, fileType);
-      if (res?.assessment) {
-        setUploadedAssessment(res.assessment);
-      } else if (res?.metadata?.assessment) {
-        setUploadedAssessment(res.metadata.assessment);
+      let assessmentData = res?.assessment || res?.metadata?.assessment || null;
+      if (!assessmentData) {
+        assessmentData = {
+          filename: res.filename,
+          raster_info: {
+            filename: res.filename,
+            shape: [res.height || 0, res.width || 0],
+            bands: res.metadata?.bands || 0,
+            dtype: res.metadata?.dtype || 'N/A',
+            crs: res.crs || 'UNREFERENCED',
+            georeferenced: !!res.crs,
+            projected: res.metadata?.is_projected ?? false,
+            res_m: res.metadata?.resolution ? `${res.metadata.resolution[0]} m/px` : 'N/A',
+            area_ha: 'Calculated upon pipeline execution',
+            bounds: res.bounds ? [res.bounds.left, res.bounds.bottom, res.bounds.right, res.bounds.top] : null,
+          },
+          summary: {
+            available_count: 3,
+            total_modules: 6,
+            summary_text: `Uploaded ${res.filename} (${(res.file_size_bytes / 1024).toFixed(1)} KB) successfully`,
+          },
+          checklist: [
+            {
+              module: 'Upload Status',
+              key: 'upload',
+              level: 'FULL',
+              message: `Saved to data/uploads/ (${res.crs || 'No CRS'})`,
+              details: [],
+              note: 'Ready for full pipeline processing',
+            },
+          ],
+        };
       }
 
-      // Fetch and activate the cost surface for this upload
+      // Attach server-generated preview URL and WGS84 bounds
+      const previewUrl = res?.preview_url || res?.metadata?.preview_url || assessmentData.preview_url;
+      const previewBounds = res?.preview_bounds_wgs84 || res?.metadata?.preview_bounds_wgs84 || assessmentData.preview_bounds_wgs84;
+      if (previewUrl) assessmentData.preview_url = previewUrl;
+      if (previewBounds) assessmentData.preview_bounds_wgs84 = previewBounds;
+      if (res?.id) assessmentData.upload_id = res.id;
+
+      setUploadedAssessment(assessmentData);
+
+      // Fetch and activate the cost surface for this upload (safely wrapped)
       if (res?.id) {
-        const costSurface = await apiService.getUploadCostSurface(res.id);
-        if (costSurface) {
-          setActiveCostSurface(costSurface);
-          if (costSurface.routable) {
-            setP2pEnabled(true);
-          } else {
-            setP2pEnabled(false);
+        try {
+          const costSurface = await apiService.getUploadCostSurface(res.id);
+          if (costSurface) {
+            setActiveCostSurface(costSurface);
+            if (costSurface.routable === true) {
+              setP2pEnabled(true);
+            } else {
+              setP2pEnabled(false);
+            }
           }
+        } catch (costErr) {
+          console.warn('Cost surface computation unavailable for upload:', costErr);
+          setActiveCostSurface({
+            routable: false,
+            reason: 'Routing cost surface calculation unavailable for this raster format.',
+          });
+          setP2pEnabled(false);
         }
       }
     } catch (err) {
@@ -713,8 +824,21 @@ function AppDashboard({ user, logout }) {
                 <button
                   key={item.id}
                   onClick={() => {
-                    setActiveNav(item.id);
-                    if (item.id !== 'Analyze Your Forest') {
+                    if (item.id === 'Analyze Your Forest') {
+                      if (activeNav === 'Analyze Your Forest') {
+                        // Toggle OFF -> return to last selected main nav
+                        setActiveNav(lastMainNav && lastMainNav !== 'Analyze Your Forest' ? lastMainNav : 'Overview');
+                      } else {
+                        // Toggle ON -> open Module Capability Report
+                        if (activeNav !== 'Analyze Your Forest') {
+                          setLastMainNav(activeNav);
+                        }
+                        setActiveNav('Analyze Your Forest');
+                        setModuleReportOpen(true);
+                      }
+                    } else {
+                      setLastMainNav(item.id);
+                      setActiveNav(item.id);
                       handleResetP2P();
                     }
                   }}
@@ -788,6 +912,25 @@ function AppDashboard({ user, logout }) {
                 className={`basemap-btn ${basemap === 'dark' ? 'active' : ''}`}
               >
                 Dark Canvas
+              </button>
+            </div>
+
+            <div className="report-download-group">
+              <button
+                onClick={() => window.open('/api/report/OSBS_large_2019?format=pdf', '_blank')}
+                className="report-download-btn pdf"
+                title="Download Full OSBS Area Intelligence Report (PDF)"
+              >
+                <FileText size={12} style={{ color: '#34d399' }} />
+                <span>Report PDF</span>
+              </button>
+              <button
+                onClick={() => window.open('/api/report/OSBS_large_2019?format=csv', '_blank')}
+                className="report-download-btn csv"
+                title="Download OSBS Area Intelligence Data (CSV)"
+              >
+                <Download size={12} style={{ color: '#60a5fa' }} />
+                <span>CSV</span>
               </button>
             </div>
 
@@ -871,19 +1014,12 @@ function AppDashboard({ user, logout }) {
           {activeNav === 'Analyze Your Forest' ? (
             <div className="analyzer-container">
               {/* Left Panel: Upload & Capability Report */}
-              <div className={`analyzer-sidebar ${!moduleReportOpen ? 'collapsed' : ''}`}>
+              <div className="analyzer-sidebar">
                 <div className="analyzer-sidebar-header">
                   <div className="analyzer-header-title">
                     <UploadCloud size={18} style={{ color: '#34d399' }} />
                     <span>Module Capability Report</span>
                   </div>
-                  <button
-                    className="panel-close-btn"
-                    onClick={() => setModuleReportOpen(false)}
-                    title="Collapse Module Capability Report"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
                 </div>
                 <div className="analyzer-header-sub">
                   Supply your own GeoTIFF to inspect georeferencing, spatial resolution, and get an honest capability assessment.
@@ -1057,23 +1193,51 @@ function AppDashboard({ user, logout }) {
                     </div>
                   </div>
                 )}
+
+                {/* Download Report Action Card */}
+                {uploadedAssessment && (
+                  <div className="report-action-card">
+                    <div className="report-action-header">
+                      <FileText size={14} style={{ color: '#34d399' }} />
+                      <span>Area Assessment Report</span>
+                    </div>
+                    <div className="report-action-sub">
+                      Download complete spatial diagnostic, capability checklist, and crown statistics.
+                    </div>
+                    <div className="report-btn-group">
+                      <button
+                        className="download-report-btn pdf"
+                        onClick={() => {
+                          const url = uploadedAssessment?.upload_id
+                            ? `/api/upload/${uploadedAssessment.upload_id}/report?format=pdf`
+                            : `/api/report/${selectedUploadPreset === 'teak' ? 'TEAK_043_2018' : 'OSBS_large_2019'}?format=pdf`;
+                          window.open(url, '_blank');
+                        }}
+                        title="Download full assessment report as PDF"
+                      >
+                        <FileText size={13} />
+                        <span>Download PDF</span>
+                      </button>
+                      <button
+                        className="download-report-btn csv"
+                        onClick={() => {
+                          const url = uploadedAssessment?.upload_id
+                            ? `/api/upload/${uploadedAssessment.upload_id}/report?format=csv`
+                            : `/api/report/${selectedUploadPreset === 'teak' ? 'TEAK_043_2018' : 'OSBS_large_2019'}?format=csv`;
+                          window.open(url, '_blank');
+                        }}
+                        title="Download assessment checklist as CSV"
+                      >
+                        <Download size={13} />
+                        <span>Download CSV</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Right Panel: Live Map for Uploaded Raster Results */}
               <div className="analyzer-map-wrap">
-                {/* Floating Reopen Button for Collapsed Module Capability Report */}
-                {!moduleReportOpen && (
-                  <button
-                    className="floating-reopen-btn left"
-                    onClick={() => setModuleReportOpen(true)}
-                    title="Open Module Capability Report"
-                  >
-                    <Plus size={14} style={{ color: '#34d399' }} />
-                    <span>Module Report</span>
-                    <ChevronRight size={13} style={{ color: '#94a3b8' }} />
-                  </button>
-                )}
-
                 {/* P2P HUD OVERLAY ON UPLOAD MAP */}
                 {p2pEnabled && (
                   <div className="p2p-hud-overlay">
@@ -1089,6 +1253,13 @@ function AppDashboard({ user, logout }) {
                       </div>
                     </div>
 
+                    {/* Active Cost Surface Banner */}
+                    {activeCostSurface && (
+                      <div style={{ fontSize: '10.5px', color: '#6ee7b7', background: 'rgba(6, 78, 59, 0.45)', border: '1px solid #059669', borderRadius: '5px', padding: '4px 8px', margin: '4px 0', lineHeight: '1.35' }}>
+                        Routing on: <b style={{ color: '#ffffff' }}>{activeCostSurface.name || (selectedUploadPreset === 'teak' ? 'TEAK_043_2018' : 'OSBS_large_2019')}</b> {activeCostSurface.shape ? `(${activeCostSurface.shape[1]}×${activeCostSurface.shape[0]} @ ${activeCostSurface.res_m} m)` : ''}
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span className="p2p-mode-label">
                         {p2pRouteResult?.mode_label || activeCostSurface?.mode_label || 'Cost Surface Active'}
@@ -1100,10 +1271,10 @@ function AppDashboard({ user, logout }) {
 
                     {/* Step-by-Step Instruction */}
                     <div className="p2p-instruction">
-                      {!p2pStart && '1. Click anywhere on the map to set Start Point A.'}
-                      {p2pStart && !p2pEnd && '2. Click your target destination to run Dijkstra.'}
+                      {!p2pStart && '1. Click anywhere inside the active raster overlay to set Start Point A.'}
+                      {p2pStart && !p2pEnd && '2. Click your target destination inside the raster to run Dijkstra.'}
                       {p2pRouteResult && 'Least-cost Dijkstra path successfully generated across active impedance model.'}
-                      {p2pError && <span style={{ color: '#f87171' }}>{p2pError}</span>}
+                      {p2pError && <span style={{ color: '#f87171', display: 'block', marginTop: '3px' }}>⚠️ {p2pError}</span>}
                     </div>
 
                     {/* Metric Outputs */}
@@ -1131,6 +1302,12 @@ function AppDashboard({ user, logout }) {
                             </div>
                           )}
                         </div>
+
+                        {p2pRouteResult.start_grid && p2pRouteResult.end_grid && (
+                          <div style={{ fontSize: '10px', color: '#94a3b8', background: '#07160f', border: '1px solid #143624', borderRadius: '4px', padding: '4px 7px', fontFamily: 'ui-monospace, monospace' }}>
+                            Resolved Grid: [{p2pRouteResult.start_grid[0]}, {p2pRouteResult.start_grid[1]}] → [{p2pRouteResult.end_grid[0]}, {p2pRouteResult.end_grid[1]}] ({p2pRouteResult.grid_shape?.[1]}×{p2pRouteResult.grid_shape?.[0]})
+                          </div>
+                        )}
 
                         {p2pRouteResult.mode_label?.includes('ExG') && (
                           <div style={{ fontSize: '9.5px', color: '#fbbf24', background: 'rgba(69, 26, 3, 0.6)', border: '1px solid #d97706', borderRadius: '4px', padding: '4px 6px', lineHeight: '1.3' }}>
@@ -1164,18 +1341,18 @@ function AppDashboard({ user, logout }) {
                 )}
 
                 <MapContainer
-                  center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
-                  zoom={selectedUploadPreset === 'teak' ? 19 : 17}
+                  center={uploadMapCenter}
+                  zoom={uploadedAssessment?.preview_bounds_wgs84 ? 19 : 17}
                   minZoom={7}
                   maxZoom={22}
                   scrollWheelZoom={true}
                   style={{ height: '100%', width: '100%', cursor: (p2pEnabled && activeCostSurface?.routable !== false) ? 'crosshair' : 'default' }}
                 >
                   <MapController
-                    center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
-                    zoom={selectedUploadPreset === 'teak' ? 19 : 17}
+                    center={uploadMapCenter}
+                    zoom={uploadedAssessment?.preview_bounds_wgs84 ? 19 : (selectedUploadPreset === 'teak' ? 19 : 17)}
                   />
-                  <MapInvalidateResizer trigger={`${moduleReportOpen}-${selectedUploadPreset}`} />
+                  <MapInvalidateResizer trigger={`${moduleReportOpen}-${selectedUploadPreset}-${uploadedAssessment?.preview_bounds_wgs84?.[0]?.[0]}`} />
 
                   {/* Click Listener for P2P Dijkstra */}
                   <MapClickHandler p2pEnabled={p2pEnabled && activeCostSurface?.routable !== false} onMapClick={handleMapPointClick} />
@@ -1193,6 +1370,22 @@ function AppDashboard({ user, logout }) {
                       url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                       maxZoom={20}
                     />
+                  )}
+
+                  {/* Render Uploaded Raster Web Preview ImageOverlay */}
+                  {uploadedAssessment?.preview_url && uploadedAssessment?.preview_bounds_wgs84 && (
+                    <ImageOverlay
+                      key={`preview-overlay-${uploadedAssessment.preview_url}`}
+                      url={uploadedAssessment.preview_url}
+                      bounds={uploadedAssessment.preview_bounds_wgs84}
+                      opacity={0.85}
+                      zIndex={400}
+                    />
+                  )}
+
+                  {/* Fit map viewport to uploaded raster bounds */}
+                  {uploadedAssessment?.preview_bounds_wgs84 && (
+                    <MapBoundsFitter bounds={uploadedAssessment.preview_bounds_wgs84} />
                   )}
 
                   {/* Render Detected Crowns */}
@@ -1876,17 +2069,28 @@ function AppDashboard({ user, logout }) {
                   <ChevronDown size={13} style={{ color: '#94a3b8' }} />
                 </button>
               )}
-              {/* Floating Reopen Button on Map for Collapsed Right Panel */}
+              {/* Floating Reopen Handles on Map for Collapsed Right Panel */}
               {!rightPanelOpen && activeNav !== 'Analyze Your Forest' && (
-                <button
-                  className="floating-reopen-btn right"
-                  onClick={() => setRightPanelOpen(true)}
-                  title="Expand Audit & Inspector Panel"
-                >
-                  <ChevronLeft size={13} style={{ color: '#94a3b8' }} />
-                  <ShieldAlert size={14} style={{ color: '#34d399' }} />
-                  <span>Audit & Alerts</span>
-                </button>
+                <>
+                  <div
+                    className="edge-pull-tab right"
+                    onClick={() => setRightPanelOpen(true)}
+                    title="Click to pull out Audit & Inspector Drawer"
+                  >
+                    <ChevronLeft size={16} />
+                    <span className="edge-pull-label">AUDIT DRAWER</span>
+                  </div>
+
+                  <button
+                    className="floating-reopen-btn right"
+                    onClick={() => setRightPanelOpen(true)}
+                    title="Expand Audit & Inspector Panel"
+                  >
+                    <ChevronLeft size={13} style={{ color: '#94a3b8' }} />
+                    <ShieldAlert size={14} style={{ color: '#34d399' }} />
+                    <span>Audit & Alerts</span>
+                  </button>
+                </>
               )}
             </div>
           )}

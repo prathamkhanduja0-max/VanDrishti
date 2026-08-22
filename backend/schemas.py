@@ -22,6 +22,8 @@ class UploadResponse(BaseModel):
     created_at: str
     metadata: Dict[str, Any] = Field(default_factory=dict)
     assessment: Optional[Dict[str, Any]] = None
+    preview_url: Optional[str] = None
+    preview_bounds_wgs84: Optional[List[List[float]]] = None
 
 
 # Process & Job schemas

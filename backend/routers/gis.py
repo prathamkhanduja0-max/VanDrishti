@@ -96,3 +96,31 @@ async def fetch_assessment(site: str = Query("osbs", description="'osbs' or 'tea
     if not data:
         raise HTTPException(status_code=404, detail=f"Assessment for site '{site}' not found")
     return JSONResponse(content=data)
+
+
+@router.get("/api/report/{site}", summary="Generate and download area intelligence report for bundled site")
+@router.get("/api/gis/report/{site}", summary="Generate and download area intelligence report for bundled site (alias)")
+async def get_site_report(site: str, format: str = Query("pdf", description="'pdf' or 'csv'")):
+    from fastapi.responses import FileResponse
+    from generate_area_report import generate_area_report
+
+    format_lower = format.lower()
+    if format_lower not in ["pdf", "csv", "md"]:
+        raise HTTPException(status_code=400, detail="Invalid format. Must be 'pdf' or 'csv'")
+    try:
+        report_files = generate_area_report(site_name=site)
+        target_path = report_files.get(format_lower)
+        if not target_path or not target_path.exists():
+            raise HTTPException(status_code=500, detail="Failed generating report file")
+        stem = report_files["stem"]
+        filename = f"{stem}_assessment.{format_lower}"
+        media_type = "application/pdf" if format_lower == "pdf" else ("text/csv" if format_lower == "csv" else "text/markdown")
+        return FileResponse(
+            path=target_path,
+            media_type=media_type,
+            filename=filename,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
+

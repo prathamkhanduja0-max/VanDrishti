@@ -64,10 +64,27 @@ def process_uploaded_file(file: UploadFile, file_type: str = "rgb_t2") -> Dict[s
         except Exception as e:
             metadata["raster_inspect_error"] = str(e)
 
+        # Generate web-viewable PNG preview and WGS84 bounds for Leaflet ImageOverlay
+        preview_url = None
+        preview_bounds_wgs84 = None
+        try:
+            preview_res = generate_raster_preview(target_path, upload_id)
+            preview_url = preview_res.get("preview_url")
+            preview_bounds_wgs84 = preview_res.get("preview_bounds_wgs84")
+            metadata["preview_url"] = preview_url
+            metadata["preview_bounds_wgs84"] = preview_bounds_wgs84
+            if not preview_res.get("has_crs"):
+                metadata["preview_note"] = "Raster has no coordinate reference system (CRS) — map overlay disabled."
+        except Exception as preview_err:
+            metadata["preview_error"] = str(preview_err)
+
         # Run automated capability assessment
         try:
             import assess_upload
             assessment = assess_upload.assess_upload(target_path, run_detection=True)
+            if assessment:
+                assessment["preview_url"] = preview_url
+                assessment["preview_bounds_wgs84"] = preview_bounds_wgs84
             metadata["assessment"] = assessment
         except Exception as assess_err:
             metadata["assessment_error"] = str(assess_err)
@@ -168,9 +185,110 @@ def process_uploaded_file(file: UploadFile, file_type: str = "rgb_t2") -> Dict[s
         metadata=metadata,
     )
     
-    # Return response including top-level assessment for immediate frontend consumption
+    # Return response including top-level assessment, preview_url, preview_bounds_wgs84 for frontend consumption
     record["assessment"] = assessment
+    record["preview_url"] = metadata.get("preview_url")
+    record["preview_bounds_wgs84"] = metadata.get("preview_bounds_wgs84")
     return record
+
+
+def generate_raster_preview(raster_path: Path, upload_id: str) -> Dict[str, Any]:
+    """Generates a downsampled, 8-bit normalized PNG preview and computes WGS84 bounds for Leaflet ImageOverlay."""
+    import numpy as np
+    from PIL import Image
+    from rasterio.enums import Resampling
+    from rasterio.warp import transform_bounds
+
+    preview_file = UPLOADS_DIR / f"{upload_id}_preview.png"
+    preview_url = f"/api/upload/{upload_id}/preview"
+
+    with rasterio.open(raster_path) as src:
+        has_crs = bool(src.crs)
+        w, h = src.width, src.height
+        count = src.count
+
+        max_dim = 1024
+        scale = min(1.0, max_dim / max(w, h))
+        out_w = max(1, int(round(w * scale)))
+        out_h = max(1, int(round(h * scale)))
+
+        num_bands = min(3, count)
+        band_indices = list(range(1, num_bands + 1))
+
+        data = src.read(
+            band_indices,
+            out_shape=(num_bands, out_h, out_w),
+            resampling=Resampling.bilinear,
+        )
+
+        norm_bands = []
+        for b in range(num_bands):
+            arr = data[b].astype(np.float32)
+            finite = arr[np.isfinite(arr)]
+            if finite.size == 0:
+                norm_bands.append(np.zeros((out_h, out_w), dtype=np.uint8))
+                continue
+            vmax = float(finite.max())
+            vmin = float(finite.min())
+            if vmax <= 1.5 and vmin >= -0.5:
+                norm = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
+            elif vmax > 255.0:
+                p2, p98 = np.percentile(finite, [2, 98])
+                if p98 - p2 < 1e-6:
+                    norm = np.zeros((out_h, out_w), dtype=np.uint8)
+                else:
+                    norm = np.clip((arr - p2) / (p98 - p2) * 255.0, 0, 255).astype(np.uint8)
+            else:
+                norm = np.clip(arr, 0, 255).astype(np.uint8)
+            norm_bands.append(norm)
+
+        if num_bands == 1:
+            rgb_arr = np.stack([norm_bands[0], norm_bands[0], norm_bands[0]], axis=-1)
+        elif num_bands == 2:
+            rgb_arr = np.stack([norm_bands[0], norm_bands[1], norm_bands[0]], axis=-1)
+        else:
+            rgb_arr = np.stack([norm_bands[0], norm_bands[1], norm_bands[2]], axis=-1)
+
+        img = Image.fromarray(rgb_arr)
+        img.save(preview_file, format="PNG")
+
+        preview_bounds_wgs84 = None
+        if has_crs:
+            try:
+                left, bottom, right, top = src.bounds
+                minx, miny, maxx, maxy = transform_bounds(src.crs, "EPSG:4326", left, bottom, right, top)
+                # Leaflet order: [[south, west], [north, east]] -> [[miny, minx], [maxy, maxx]]
+                preview_bounds_wgs84 = [[float(miny), float(minx)], [float(maxy), float(maxx)]]
+            except Exception as e:
+                print(f"Warning: could not reproject bounds to WGS84: {e}")
+
+        return {
+            "preview_url": preview_url,
+            "preview_bounds_wgs84": preview_bounds_wgs84,
+            "preview_file": str(preview_file),
+            "has_crs": has_crs,
+        }
+
+
+def get_upload_preview_path(upload_id: str) -> Optional[Path]:
+    """Returns the Path to the PNG preview for an upload ID, generating it if necessary."""
+    preview_file = UPLOADS_DIR / f"{upload_id}_preview.png"
+    if preview_file.exists():
+        return preview_file
+
+    from backend.database import get_db_connection
+    conn = get_db_connection()
+    row = conn.execute("SELECT file_path FROM uploads WHERE id = ?", (upload_id,)).fetchone()
+    conn.close()
+    if row and Path(row["file_path"]).exists():
+        try:
+            res = generate_raster_preview(Path(row["file_path"]), upload_id)
+            if Path(res["preview_file"]).exists():
+                return Path(res["preview_file"])
+        except Exception:
+            pass
+    return None
+
 
 def get_upload_cost_surface(upload_id: str) -> Dict[str, Any]:
     """Retrieves or generates on-the-fly the cost surface for a specific upload."""
@@ -201,4 +319,59 @@ def get_upload_cost_surface(upload_id: str) -> Dict[str, Any]:
             return {"routable": False, "reason": f"Failed generating cost surface: {err}"}
 
     return {"routable": False, "reason": "Upload is not a valid raster dataset for cost surface generation"}
+
+
+def generate_upload_report_file(upload_id: str, format: str = "pdf") -> tuple[Optional[Path], str, str]:
+    """Generates the assessment report (PDF or CSV) on-the-fly for an upload ID."""
+    from generate_area_report import generate_area_report
+    from backend.database import get_db_connection
+
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
+    conn.close()
+
+    if not row:
+        return None, "", ""
+
+    metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+    assessment = metadata.get("assessment")
+    file_path = Path(row["file_path"])
+
+    if not assessment and file_path.exists():
+        try:
+            import assess_upload
+            assessment = assess_upload.assess_upload(file_path, run_detection=True)
+        except Exception:
+            assessment = None
+
+    if not assessment:
+        assessment = {
+            "filename": row["filename"],
+            "raster_info": {
+                "filename": row["filename"],
+                "crs": row["crs"],
+                "georeferenced": bool(row["crs"]),
+                "shape": [row["height"] or 0, row["width"] or 0],
+            },
+            "summary": {
+                "summary_text": f"Upload record {row['filename']}",
+                "available_count": 1,
+                "total_modules": 6,
+            },
+            "checklist": [],
+        }
+
+    format_lower = format.lower()
+    if format_lower not in ["pdf", "csv", "md"]:
+        format_lower = "pdf"
+
+    # Always generate freshly to reflect current state
+    report_files = generate_area_report(assessment_data=assessment)
+    target_path = report_files.get(format_lower)
+    stem = report_files.get("stem", Path(row["filename"]).stem)
+    filename = f"{stem}_assessment.{format_lower}"
+    media_type = "application/pdf" if format_lower == "pdf" else ("text/csv" if format_lower == "csv" else "text/markdown")
+
+    return target_path, filename, media_type
+
 

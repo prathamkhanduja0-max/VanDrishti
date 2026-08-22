@@ -36,3 +36,32 @@ async def get_cost_surface(upload_id: str):
         raise HTTPException(status_code=404, detail=f"Cost surface not found for upload {upload_id}")
     return cs
 
+
+@router.get("/{upload_id}/preview", summary="Get web preview image (PNG) for uploaded raster")
+async def get_upload_preview(upload_id: str):
+    from fastapi.responses import FileResponse
+    from backend.services.upload_service import get_upload_preview_path
+
+    preview_path = get_upload_preview_path(upload_id)
+    if not preview_path or not preview_path.exists():
+        raise HTTPException(status_code=404, detail=f"Preview image not found for upload {upload_id}")
+    return FileResponse(preview_path, media_type="image/png")
+
+
+@router.get("/{upload_id}/report", summary="Generate and download assessment report (PDF/CSV) for uploaded dataset")
+async def get_upload_report(upload_id: str, format: str = "pdf"):
+    from fastapi.responses import FileResponse
+    from backend.services.upload_service import generate_upload_report_file
+
+    file_path, filename, media_type = generate_upload_report_file(upload_id, format=format)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"Failed to generate report for upload {upload_id}")
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+
