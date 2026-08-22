@@ -7,6 +7,7 @@ import {
   Marker,
   Pane,
   Polyline,
+  ImageOverlay,
   useMap,
   useMapEvents
 } from 'react-leaflet';
@@ -186,6 +187,17 @@ function MapInvalidateResizer({ trigger }) {
       clearTimeout(t2);
     };
   }, [map, trigger]);
+  return null;
+}
+
+// Automatically fits map viewport to uploaded raster bounds
+function MapBoundsFitter({ bounds }) {
+  const map = useMap();
+  useEffect(() => {
+    if (bounds && Array.isArray(bounds) && bounds.length === 2 && map) {
+      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 20 });
+    }
+  }, [map, bounds]);
   return null;
 }
 
@@ -510,12 +522,9 @@ function AppDashboard({ user, logout }) {
 
     try {
       const res = await apiService.uploadDataset(file, fileType);
-      if (res?.assessment) {
-        setUploadedAssessment(res.assessment);
-      } else if (res?.metadata?.assessment) {
-        setUploadedAssessment(res.metadata.assessment);
-      } else {
-        setUploadedAssessment({
+      let assessmentData = res?.assessment || res?.metadata?.assessment || null;
+      if (!assessmentData) {
+        assessmentData = {
           filename: res.filename,
           raster_info: {
             filename: res.filename,
@@ -544,8 +553,16 @@ function AppDashboard({ user, logout }) {
               note: 'Ready for full pipeline processing',
             },
           ],
-        });
+        };
       }
+
+      // Attach server-generated preview URL and WGS84 bounds
+      const previewUrl = res?.preview_url || res?.metadata?.preview_url || assessmentData.preview_url;
+      const previewBounds = res?.preview_bounds_wgs84 || res?.metadata?.preview_bounds_wgs84 || assessmentData.preview_bounds_wgs84;
+      if (previewUrl) assessmentData.preview_url = previewUrl;
+      if (previewBounds) assessmentData.preview_bounds_wgs84 = previewBounds;
+
+      setUploadedAssessment(assessmentData);
 
       // Fetch and activate the cost surface for this upload (safely wrapped)
       if (res?.id) {
@@ -1241,6 +1258,22 @@ function AppDashboard({ user, logout }) {
                       url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                       maxZoom={20}
                     />
+                  )}
+
+                  {/* Render Uploaded Raster Web Preview ImageOverlay */}
+                  {uploadedAssessment?.preview_url && uploadedAssessment?.preview_bounds_wgs84 && (
+                    <ImageOverlay
+                      key={`preview-overlay-${uploadedAssessment.preview_url}`}
+                      url={uploadedAssessment.preview_url}
+                      bounds={uploadedAssessment.preview_bounds_wgs84}
+                      opacity={0.85}
+                      zIndex={400}
+                    />
+                  )}
+
+                  {/* Fit map viewport to uploaded raster bounds */}
+                  {uploadedAssessment?.preview_bounds_wgs84 && (
+                    <MapBoundsFitter bounds={uploadedAssessment.preview_bounds_wgs84} />
                   )}
 
                   {/* Render Detected Crowns */}

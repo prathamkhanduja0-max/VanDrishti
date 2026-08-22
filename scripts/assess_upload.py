@@ -251,6 +251,13 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
 
             if has_crs:
                 gx, gy = xy(transform, py, px)
+                if str(crs) != "EPSG:4326":
+                    try:
+                        from rasterio.warp import transform as warp_transform
+                        lons, lats = warp_transform(crs, "EPSG:4326", [gx], [gy])
+                        gx, gy = lons[0], lats[0]
+                    except Exception:
+                        pass
             else:
                 gx, gy = px, py
 
@@ -274,7 +281,7 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
             "type": "FeatureCollection",
             "crs": {
                 "type": "name",
-                "properties": {"name": str(crs) if has_crs else "UNREFERENCED"}
+                "properties": {"name": "EPSG:4326" if has_crs else "UNREFERENCED"}
             },
             "features": features
         }

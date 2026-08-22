@@ -36,3 +36,15 @@ async def get_cost_surface(upload_id: str):
         raise HTTPException(status_code=404, detail=f"Cost surface not found for upload {upload_id}")
     return cs
 
+
+@router.get("/{upload_id}/preview", summary="Get web preview image (PNG) for uploaded raster")
+async def get_upload_preview(upload_id: str):
+    from fastapi.responses import FileResponse
+    from backend.services.upload_service import get_upload_preview_path
+
+    preview_path = get_upload_preview_path(upload_id)
+    if not preview_path or not preview_path.exists():
+        raise HTTPException(status_code=404, detail=f"Preview image not found for upload {upload_id}")
+    return FileResponse(preview_path, media_type="image/png")
+
+
