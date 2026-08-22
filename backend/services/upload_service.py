@@ -320,3 +320,58 @@ def get_upload_cost_surface(upload_id: str) -> Dict[str, Any]:
 
     return {"routable": False, "reason": "Upload is not a valid raster dataset for cost surface generation"}
 
+
+def generate_upload_report_file(upload_id: str, format: str = "pdf") -> tuple[Optional[Path], str, str]:
+    """Generates the assessment report (PDF or CSV) on-the-fly for an upload ID."""
+    from generate_area_report import generate_area_report
+    from backend.database import get_db_connection
+
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
+    conn.close()
+
+    if not row:
+        return None, "", ""
+
+    metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+    assessment = metadata.get("assessment")
+    file_path = Path(row["file_path"])
+
+    if not assessment and file_path.exists():
+        try:
+            import assess_upload
+            assessment = assess_upload.assess_upload(file_path, run_detection=True)
+        except Exception:
+            assessment = None
+
+    if not assessment:
+        assessment = {
+            "filename": row["filename"],
+            "raster_info": {
+                "filename": row["filename"],
+                "crs": row["crs"],
+                "georeferenced": bool(row["crs"]),
+                "shape": [row["height"] or 0, row["width"] or 0],
+            },
+            "summary": {
+                "summary_text": f"Upload record {row['filename']}",
+                "available_count": 1,
+                "total_modules": 6,
+            },
+            "checklist": [],
+        }
+
+    format_lower = format.lower()
+    if format_lower not in ["pdf", "csv", "md"]:
+        format_lower = "pdf"
+
+    # Always generate freshly to reflect current state
+    report_files = generate_area_report(assessment_data=assessment)
+    target_path = report_files.get(format_lower)
+    stem = report_files.get("stem", Path(row["filename"]).stem)
+    filename = f"{stem}_assessment.{format_lower}"
+    media_type = "application/pdf" if format_lower == "pdf" else ("text/csv" if format_lower == "csv" else "text/markdown")
+
+    return target_path, filename, media_type
+
+

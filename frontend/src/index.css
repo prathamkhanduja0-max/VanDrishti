@@ -1303,4 +1303,112 @@ html, body {
   color: #ffffff;
 }
 
+/* REPORT DOWNLOAD ACTION BUTTONS (TOPBAR & ANALYZER) */
+.report-download-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background-color: #07130d;
+  border: 1px solid #143624;
+  border-radius: 6px;
+  padding: 2px 4px;
+}
+
+.report-download-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  padding: 4px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.report-download-btn:hover {
+  background-color: #0f241a;
+  color: #34d399;
+  border-color: #10b981;
+}
+
+.report-download-btn.csv:hover {
+  color: #60a5fa;
+  border-color: #3b82f6;
+}
+
+/* ANALYZER SIDEBAR REPORT CARD */
+.report-action-card {
+  background-color: #081710;
+  border: 1px solid #143624;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.report-action-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.report-action-sub {
+  font-size: 10.5px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.report-btn-group {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.download-report-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.download-report-btn.pdf {
+  background-color: #064e3b;
+  border: 1px solid #10b981;
+  color: #ecfdf5;
+}
+
+.download-report-btn.pdf:hover {
+  background-color: #047857;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.download-report-btn.csv {
+  background-color: #0f241a;
+  border: 1px solid #1b4d35;
+  color: #94a3b8;
+}
+
+.download-report-btn.csv:hover {
+  background-color: #143624;
+  color: #60a5fa;
+  border-color: #3b82f6;
+}
+
+
 

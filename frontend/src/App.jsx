@@ -47,7 +47,8 @@ import {
   RotateCcw,
   X,
   Plus,
-  LogOut
+  LogOut,
+  Download
 } from 'lucide-react';
 import { computePointToPointPath } from './utils/dijkstra';
 import { apiService } from './services/api';
@@ -598,6 +599,7 @@ function AppDashboard({ user, logout }) {
       const previewBounds = res?.preview_bounds_wgs84 || res?.metadata?.preview_bounds_wgs84 || assessmentData.preview_bounds_wgs84;
       if (previewUrl) assessmentData.preview_url = previewUrl;
       if (previewBounds) assessmentData.preview_bounds_wgs84 = previewBounds;
+      if (res?.id) assessmentData.upload_id = res.id;
 
       setUploadedAssessment(assessmentData);
 
@@ -913,6 +915,25 @@ function AppDashboard({ user, logout }) {
               </button>
             </div>
 
+            <div className="report-download-group">
+              <button
+                onClick={() => window.open('/api/report/OSBS_large_2019?format=pdf', '_blank')}
+                className="report-download-btn pdf"
+                title="Download Full OSBS Area Intelligence Report (PDF)"
+              >
+                <FileText size={12} style={{ color: '#34d399' }} />
+                <span>Report PDF</span>
+              </button>
+              <button
+                onClick={() => window.open('/api/report/OSBS_large_2019?format=csv', '_blank')}
+                className="report-download-btn csv"
+                title="Download OSBS Area Intelligence Data (CSV)"
+              >
+                <Download size={12} style={{ color: '#60a5fa' }} />
+                <span>CSV</span>
+              </button>
+            </div>
+
             <div className="live-badge">
               <Radio size={13} style={{ color: '#34d399' }} />
               <span>Verified Real Data</span>
@@ -1169,6 +1190,47 @@ function AppDashboard({ user, logout }) {
                     </div>
                     <div className="summary-honesty-note">
                       Blocked modules will not produce output. VanDrishti states data gaps plainly and never silently substitutes a fallback as equivalent.
+                    </div>
+                  </div>
+                )}
+
+                {/* Download Report Action Card */}
+                {uploadedAssessment && (
+                  <div className="report-action-card">
+                    <div className="report-action-header">
+                      <FileText size={14} style={{ color: '#34d399' }} />
+                      <span>Area Assessment Report</span>
+                    </div>
+                    <div className="report-action-sub">
+                      Download complete spatial diagnostic, capability checklist, and crown statistics.
+                    </div>
+                    <div className="report-btn-group">
+                      <button
+                        className="download-report-btn pdf"
+                        onClick={() => {
+                          const url = uploadedAssessment?.upload_id
+                            ? `/api/upload/${uploadedAssessment.upload_id}/report?format=pdf`
+                            : `/api/report/${selectedUploadPreset === 'teak' ? 'TEAK_043_2018' : 'OSBS_large_2019'}?format=pdf`;
+                          window.open(url, '_blank');
+                        }}
+                        title="Download full assessment report as PDF"
+                      >
+                        <FileText size={13} />
+                        <span>Download PDF</span>
+                      </button>
+                      <button
+                        className="download-report-btn csv"
+                        onClick={() => {
+                          const url = uploadedAssessment?.upload_id
+                            ? `/api/upload/${uploadedAssessment.upload_id}/report?format=csv`
+                            : `/api/report/${selectedUploadPreset === 'teak' ? 'TEAK_043_2018' : 'OSBS_large_2019'}?format=csv`;
+                          window.open(url, '_blank');
+                        }}
+                        title="Download assessment checklist as CSV"
+                      >
+                        <Download size={13} />
+                        <span>Download CSV</span>
+                      </button>
                     </div>
                   </div>
                 )}
