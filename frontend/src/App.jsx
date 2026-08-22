@@ -870,6 +870,40 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Optical Detection Preview Result Card */}
+                {uploadedAssessment?.detection_results && (
+                  <div className="meta-grid-card" style={{ borderColor: '#059669', background: 'rgba(6, 78, 59, 0.25)' }}>
+                    <div style={{ fontWeight: 700, color: '#34d399', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Trees size={14} />
+                        <span>Optical Crown Preview</span>
+                      </div>
+                      <span className="badge-pill full" style={{ fontSize: '9.5px' }}>
+                        {uploadedAssessment.detection_results.method === 'exg_peak_heuristic' ? 'Fast ExG' : 'AI Detector'}
+                      </span>
+                    </div>
+                    <div style={{ marginTop: '8px' }}>
+                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#6ee7b7', letterSpacing: '-0.5px' }}>
+                        {(uploadedAssessment.detection_results.count || 0).toLocaleString()}
+                        <span style={{ fontSize: '12px', fontWeight: 500, color: '#94a3b8', marginLeft: '6px' }}>
+                          greenness peaks
+                        </span>
+                      </div>
+                      {uploadedAssessment.detection_results.truncated && (
+                        <div style={{ fontSize: '10.5px', color: '#fbbf24', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>•</span>
+                          <span>
+                            showing {(uploadedAssessment.detection_results.count_rendered || 0).toLocaleString()} strongest of {(uploadedAssessment.detection_results.count || 0).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '5px' }}>
+                        Fast optical peak detection for instant visual feedback on uncalibrated imagery.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Capability Checklist */}
                 {uploadedAssessment?.checklist && (
                   <div className="checklist-card">
@@ -1030,12 +1064,14 @@ export default function App() {
                       }}
                       onEachFeature={(feature, layer) => {
                         const p = feature.properties || {};
+                        const val = p.exg_strength !== undefined ? p.exg_strength : p.confidence;
+                        const label = p.exg_strength !== undefined ? 'ExG Strength' : 'Confidence';
                         layer.bindPopup(`
                           <div style="font-size:12px;">
                             <b style="color:#34d399;">Detected Tree Crown #${p.tree_id}</b><br/>
-                            <b>Confidence:</b> ${(p.confidence * 100).toFixed(1)}%<br/>
+                            <b>${label}:</b> ${val !== undefined ? (val * 100).toFixed(1) + '%' : 'N/A'}<br/>
                             <b>Pixel Coordinates:</b> [${p.pixel_x}, ${p.pixel_y}]<br/>
-                            <span style="font-size:10px; color:#94a3b8;">Single-Raster Optical Crown Detection</span>
+                            <span style="font-size:10px; color:#94a3b8;">Single-Raster Optical Crown Preview</span>
                           </div>
                         `);
                       }}
