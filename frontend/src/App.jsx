@@ -8,6 +8,7 @@ import {
   Pane,
   Polyline,
   ImageOverlay,
+  Rectangle,
   useMap,
   useMapEvents
 } from 'react-leaflet';
@@ -292,6 +293,25 @@ function AppDashboard({ user, logout }) {
     if (selectedUploadPreset === 'teak') return [37.000, -119.011];
     return mapCenter;
   }, [uploadedAssessment?.preview_bounds_wgs84, selectedUploadPreset, mapCenter]);
+
+  // P2P 250m Study Area / Upload Area Bounding Box for Highlighting
+  const p2pStudyAreaBounds = useMemo(() => {
+    if (activeCostSurface?.wgs84_bounds && activeCostSurface.wgs84_bounds.length === 4) {
+      const [minLon, minLat, maxLon, maxLat] = activeCostSurface.wgs84_bounds;
+      return [
+        [minLat, minLon],
+        [maxLat, maxLon],
+      ];
+    }
+    if (uploadedAssessment?.preview_bounds_wgs84 && Array.isArray(uploadedAssessment.preview_bounds_wgs84) && uploadedAssessment.preview_bounds_wgs84.length === 2) {
+      return uploadedAssessment.preview_bounds_wgs84;
+    }
+    // Default 250m OSBS Study Area Bounds [SW, NE]
+    return [
+      [29.680378, -81.953931],
+      [29.682653, -81.951369],
+    ];
+  }, [activeCostSurface, uploadedAssessment]);
 
   const handleZoomChange = useCallback((z) => {
     setMapZoomLevel(z);
@@ -1425,6 +1445,20 @@ function AppDashboard({ user, logout }) {
                     />
                   )}
 
+                  {/* P2P Active Upload Area Highlight (Light Yellow Border) */}
+                  {p2pEnabled && p2pStudyAreaBounds && (
+                    <Rectangle
+                      bounds={p2pStudyAreaBounds}
+                      pathOptions={{
+                        color: '#facc15',
+                        weight: 2.8,
+                        dashArray: '6, 6',
+                        fillColor: '#fef08a',
+                        fillOpacity: 0.08,
+                      }}
+                    />
+                  )}
+
                   {/* Fit map viewport to uploaded raster bounds */}
                   {uploadedAssessment?.preview_bounds_wgs84 && (
                     <MapBoundsFitter bounds={uploadedAssessment.preview_bounds_wgs84} />
@@ -1697,6 +1731,20 @@ function AppDashboard({ user, logout }) {
                     attribution="&copy; CARTO"
                     url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                     maxZoom={20}
+                  />
+                )}
+
+                {/* P2P 250m Study Area Highlight Box (Light Yellow Border + Subtle Tint) */}
+                {p2pEnabled && p2pStudyAreaBounds && (
+                  <Rectangle
+                    bounds={p2pStudyAreaBounds}
+                    pathOptions={{
+                      color: '#facc15',
+                      weight: 2.8,
+                      dashArray: '6, 6',
+                      fillColor: '#fef08a',
+                      fillOpacity: 0.08,
+                    }}
                   />
                 )}
 
