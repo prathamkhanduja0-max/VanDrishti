@@ -1065,21 +1065,21 @@ function AppDashboard({ user, logout }) {
           </div>
 
           {/* Card 3.5 — Estimated Green Cover */}
-          <div className="stat-card" style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', borderColor: '#86efac' }}>
+          <div className="stat-card">
             <div>
               <div className="stat-label">Estimated Green Cover</div>
-              <div className="stat-value" style={{ color: '#166534' }}>
+              <div className="stat-value">
                 {stats.greenCoverPercent}<span className="stat-unit">%</span>
               </div>
               <div className="stat-sub">
                 Green Area: {stats.greenCoverAreaM2} m² • Total Area: {stats.studyAreaM2} m²
               </div>
             </div>
-            <div className="stat-icon-wrap" style={{ background: 'transparent', border: 'none', flexShrink: 0, padding: 0 }}>
+            <div className="stat-icon-wrap" style={{ padding: 0, overflow: 'hidden' }}>
               <img
                 src="/tree_cover_icon.png"
                 alt="Green Cover"
-                style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '6px' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
               />
             </div>
           </div>
