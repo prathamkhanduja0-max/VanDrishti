@@ -282,6 +282,16 @@ function AppDashboard({ user, logout }) {
   const [currentZoom, setCurrentZoom] = useState(17);
   const [mapZoomLevel, setMapZoomLevel] = useState(17);
 
+  // Dynamic center for Analyzer / Custom Upload Map
+  const uploadMapCenter = useMemo(() => {
+    if (uploadedAssessment?.preview_bounds_wgs84 && Array.isArray(uploadedAssessment.preview_bounds_wgs84) && uploadedAssessment.preview_bounds_wgs84.length === 2) {
+      const b = uploadedAssessment.preview_bounds_wgs84;
+      return [(b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2];
+    }
+    if (selectedUploadPreset === 'teak') return [37.000, -119.011];
+    return mapCenter;
+  }, [uploadedAssessment?.preview_bounds_wgs84, selectedUploadPreset, mapCenter]);
+
   const handleZoomChange = useCallback((z) => {
     setMapZoomLevel(z);
   }, []);
@@ -454,6 +464,29 @@ function AppDashboard({ user, logout }) {
     if (!p2pEnabled) return;
     const pt = [latlng.lat, latlng.lng];
 
+    if (!activeCostSurface) {
+      setP2pError('Cost surface data not yet loaded for this area.');
+      return;
+    }
+
+    if (activeCostSurface.routable === false) {
+      setP2pError(activeCostSurface.reason || 'Active cost surface is not routable.');
+      return;
+    }
+
+    // Validate click is inside the active cost surface's WGS84 bounding box
+    const bounds = activeCostSurface.wgs84_bounds; // [minLon, minLat, maxLon, maxLat]
+    if (bounds && bounds.length === 4) {
+      const [minLon, minLat, maxLon, maxLat] = bounds;
+      const lat = latlng.lat;
+      const lon = latlng.lng;
+      if (lon < minLon || lon > maxLon || lat < minLat || lat > maxLat) {
+        const surfName = activeCostSurface.name || 'the uploaded raster area';
+        setP2pError(`Click inside the uploaded area (${surfName}) to set routing points.`);
+        return;
+      }
+    }
+
     if (!p2pStart || (p2pStart && p2pEnd)) {
       // First click -> Start Point A
       setP2pStart(pt);
@@ -464,10 +497,14 @@ function AppDashboard({ user, logout }) {
       // Second click -> End Point B + Execute Dijkstra!
       setP2pEnd(pt);
       try {
-        if (!activeCostSurface) {
-          throw new Error('Cost surface data not yet loaded for this area.');
-        }
         const result = computePointToPointPath(activeCostSurface, p2pStart, pt);
+        console.log('[VanDrishti Dijkstra] Solved Route:', {
+          surface: activeCostSurface.name,
+          startGrid: result.start_grid,
+          endGrid: result.end_grid,
+          distanceMeters: result.distance_meters,
+          travelTimeMinutes: result.travel_time_minutes,
+        });
         setP2pRouteResult(result);
         setP2pError(null);
       } catch (err) {
@@ -1154,6 +1191,13 @@ function AppDashboard({ user, logout }) {
                       </div>
                     </div>
 
+                    {/* Active Cost Surface Banner */}
+                    {activeCostSurface && (
+                      <div style={{ fontSize: '10.5px', color: '#6ee7b7', background: 'rgba(6, 78, 59, 0.45)', border: '1px solid #059669', borderRadius: '5px', padding: '4px 8px', margin: '4px 0', lineHeight: '1.35' }}>
+                        Routing on: <b style={{ color: '#ffffff' }}>{activeCostSurface.name || (selectedUploadPreset === 'teak' ? 'TEAK_043_2018' : 'OSBS_large_2019')}</b> {activeCostSurface.shape ? `(${activeCostSurface.shape[1]}×${activeCostSurface.shape[0]} @ ${activeCostSurface.res_m} m)` : ''}
+                      </div>
+                    )}
+
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span className="p2p-mode-label">
                         {p2pRouteResult?.mode_label || activeCostSurface?.mode_label || 'Cost Surface Active'}
@@ -1165,10 +1209,10 @@ function AppDashboard({ user, logout }) {
 
                     {/* Step-by-Step Instruction */}
                     <div className="p2p-instruction">
-                      {!p2pStart && '1. Click anywhere on the map to set Start Point A.'}
-                      {p2pStart && !p2pEnd && '2. Click your target destination to run Dijkstra.'}
+                      {!p2pStart && '1. Click anywhere inside the active raster overlay to set Start Point A.'}
+                      {p2pStart && !p2pEnd && '2. Click your target destination inside the raster to run Dijkstra.'}
                       {p2pRouteResult && 'Least-cost Dijkstra path successfully generated across active impedance model.'}
-                      {p2pError && <span style={{ color: '#f87171' }}>{p2pError}</span>}
+                      {p2pError && <span style={{ color: '#f87171', display: 'block', marginTop: '3px' }}>⚠️ {p2pError}</span>}
                     </div>
 
                     {/* Metric Outputs */}
@@ -1196,6 +1240,12 @@ function AppDashboard({ user, logout }) {
                             </div>
                           )}
                         </div>
+
+                        {p2pRouteResult.start_grid && p2pRouteResult.end_grid && (
+                          <div style={{ fontSize: '10px', color: '#94a3b8', background: '#07160f', border: '1px solid #143624', borderRadius: '4px', padding: '4px 7px', fontFamily: 'ui-monospace, monospace' }}>
+                            Resolved Grid: [{p2pRouteResult.start_grid[0]}, {p2pRouteResult.start_grid[1]}] → [{p2pRouteResult.end_grid[0]}, {p2pRouteResult.end_grid[1]}] ({p2pRouteResult.grid_shape?.[1]}×{p2pRouteResult.grid_shape?.[0]})
+                          </div>
+                        )}
 
                         {p2pRouteResult.mode_label?.includes('ExG') && (
                           <div style={{ fontSize: '9.5px', color: '#fbbf24', background: 'rgba(69, 26, 3, 0.6)', border: '1px solid #d97706', borderRadius: '4px', padding: '4px 6px', lineHeight: '1.3' }}>
@@ -1229,18 +1279,18 @@ function AppDashboard({ user, logout }) {
                 )}
 
                 <MapContainer
-                  center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
-                  zoom={selectedUploadPreset === 'teak' ? 19 : 17}
+                  center={uploadMapCenter}
+                  zoom={uploadedAssessment?.preview_bounds_wgs84 ? 19 : 17}
                   minZoom={7}
                   maxZoom={22}
                   scrollWheelZoom={true}
                   style={{ height: '100%', width: '100%', cursor: (p2pEnabled && activeCostSurface?.routable !== false) ? 'crosshair' : 'default' }}
                 >
                   <MapController
-                    center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
-                    zoom={selectedUploadPreset === 'teak' ? 19 : 17}
+                    center={uploadMapCenter}
+                    zoom={uploadedAssessment?.preview_bounds_wgs84 ? 19 : (selectedUploadPreset === 'teak' ? 19 : 17)}
                   />
-                  <MapInvalidateResizer trigger={`${moduleReportOpen}-${selectedUploadPreset}`} />
+                  <MapInvalidateResizer trigger={`${moduleReportOpen}-${selectedUploadPreset}-${uploadedAssessment?.preview_bounds_wgs84?.[0]?.[0]}`} />
 
                   {/* Click Listener for P2P Dijkstra */}
                   <MapClickHandler p2pEnabled={p2pEnabled && activeCostSurface?.routable !== false} onMapClick={handleMapPointClick} />

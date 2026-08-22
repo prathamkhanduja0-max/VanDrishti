@@ -251,5 +251,8 @@ export function computePointToPointPath(costSurface, startLatLng, endLatLng) {
     pixel_distance: totalStepsPx.toFixed(1),
     mode_label: modeLabel,
     active_terms: costSurface.active_terms || ["ExG"],
+    start_grid: [startRow, startCol],
+    end_grid: [endRow, endCol],
+    grid_shape: [H, W],
   };
 }
