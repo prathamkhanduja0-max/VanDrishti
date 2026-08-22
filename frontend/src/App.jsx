@@ -43,10 +43,13 @@ import {
   ArrowUpRight,
   Route,
   RotateCcw,
-  X
+  X,
+  LogOut
 } from 'lucide-react';
 import { computePointToPointPath } from './utils/dijkstra';
 import { apiService } from './services/api';
+import { useAuth } from './context/AuthContext';
+import LoginPage from './components/LoginPage';
 
 // Custom Marker Icons for Route Stops and Entry Point
 const createStopIcon = (number, bg = '#ef4444') => {
@@ -169,6 +172,25 @@ function MapClickHandler({ p2pEnabled, onMapClick }) {
 }
 
 export default function App() {
+  const { user, loading: authLoading, logout } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#060e0a', gap: '16px' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid #143624', borderTopColor: '#34d399', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ color: '#64748b', fontSize: '13px', fontWeight: 500 }}>Loading VanDrishti…</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
+
+  return <AppDashboard user={user} logout={logout} />;
+}
+
+function AppDashboard({ user, logout }) {
   const [activeNav, setActiveNav] = useState('Overview');
   const [basemap, setBasemap] = useState('satellite'); // 'satellite' | 'dark'
 
@@ -616,6 +638,39 @@ export default function App() {
               <div className="brand-title">VanDrishti</div>
               <div className="brand-sub">Forest Intelligence Platform</div>
             </div>
+          </div>
+
+          {/* User Profile */}
+          <div style={{
+            padding: '10px 16px',
+            borderBottom: '1px solid #143624',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: 'rgba(16, 185, 129, 0.04)',
+          }}>
+            <img
+              src={user.photoURL || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.displayName || 'U') + '&background=10b981&color=fff&size=32'}
+              alt="avatar"
+              style={{ width: '30px', height: '30px', borderRadius: '50%', border: '2px solid #1e5c3a', flexShrink: 0 }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user.displayName || 'User'}
+              </div>
+              <div style={{ fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user.email}
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              style={{ background: 'none', border: '1px solid #1e3a2a', borderRadius: '6px', padding: '5px', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', flexShrink: 0 }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.color = '#f87171'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1e3a2a'; e.currentTarget.style.color = '#94a3b8'; }}
+            >
+              <LogOut size={14} />
+            </button>
           </div>
 
           {/* Scope Card */}

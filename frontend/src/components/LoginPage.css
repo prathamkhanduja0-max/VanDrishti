@@ -1,0 +1,332 @@
+/* ==========================================================================
+   LOGIN PAGE — VanDrishti Forest Theme
+   ========================================================================== */
+
+.login-page {
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-image: linear-gradient(rgba(6, 14, 10, 0.8), rgba(6, 14, 10, 0.85)), url('/login_bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle animated background glow */
+.login-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+@keyframes loginGlow {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(2%, -2%) scale(1.05); }
+}
+
+/* ---- Card ---- */
+.login-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  padding: 40px 32px;
+  background: linear-gradient(160deg, rgba(10, 23, 17, 0.95), rgba(6, 14, 10, 0.98));
+  border: 1px solid #143624;
+  border-radius: 20px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6),
+              0 0 60px rgba(16, 185, 129, 0.06);
+  text-align: center;
+}
+
+/* ---- Brand ---- */
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.login-brand-icon {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25);
+}
+
+.login-brand-icon svg {
+  color: white;
+}
+
+.login-brand-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #f1f5f9;
+  letter-spacing: -0.5px;
+}
+
+.login-brand-title span {
+  color: #34d399;
+}
+
+.login-subtitle {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+/* ---- Form ---- */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.form-group {
+  text-align: left;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  background-color: #060e0a;
+  border: 1px solid #143624;
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 14px;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #34d399;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.1);
+}
+
+.login-submit-btn {
+  width: 100%;
+  padding: 12px 16px;
+  background: #10b981;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.login-submit-btn:hover {
+  background: #059669;
+}
+
+.login-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---- Toggle Mode ---- */
+.toggle-mode {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 20px;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  color: #34d399;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  font-family: inherit;
+}
+
+.toggle-btn:hover {
+  color: #059669;
+}
+
+/* ---- Divider ---- */
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.login-divider-line {
+  flex: 1;
+  height: 1px;
+  background: #1e3a2a;
+}
+
+.login-divider-text {
+  font-size: 11px;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+/* ---- Google Button ---- */
+.login-google-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #143624, #1a4a30);
+  border: 1px solid #1e5c3a;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.login-google-btn:hover {
+  background: linear-gradient(135deg, #1a4a30, #1e5c3a);
+  border-color: #34d399;
+}
+
+.login-google-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---- Error ---- */
+.login-error {
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #f87171;
+  font-size: 12px;
+  text-align: left;
+}
+
+/* ---- Footer ---- */
+.login-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #143624;
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+/* ---- Phone Button ---- */
+.login-phone-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  margin-top: 10px;
+  background: linear-gradient(135deg, #0f2d4a, #163d60);
+  border: 1px solid #1e5476;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.login-phone-btn:hover {
+  background: linear-gradient(135deg, #163d60, #1e5476);
+  border-color: #60a5fa;
+}
+
+.login-phone-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---- Phone Auth Section ---- */
+.phone-auth-section {
+  width: 100%;
+}
+
+.phone-step-label {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.phone-step-label strong {
+  color: #e2e8f0;
+}
+
+/* ---- Phone Input Row ---- */
+.phone-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.country-code-input {
+  width: 72px !important;
+  flex-shrink: 0;
+  text-align: center;
+  padding: 12px 8px !important;
+}
+
+.phone-number-input {
+  flex: 1;
+}
+
+/* ---- OTP Input ---- */
+.otp-input {
+  text-align: center;
+  letter-spacing: 8px;
+  font-size: 20px !important;
+  font-weight: 700;
+  width: 100%;
+}
+
+/* ---- Back Button ---- */
+.phone-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 8px;
+  width: 100%;
+  padding: 6px;
+  border-radius: 6px;
+  transition: color 0.2s ease;
+}
+
+.phone-back-btn:hover {
+  color: #34d399;
+}
