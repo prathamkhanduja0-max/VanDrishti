@@ -384,6 +384,7 @@ def generate_pdf_report(md_text: str, out_path: Path):
 
     # ReportLab Fallback
     try:
+        import re
         from reportlab.lib.pagesizes import letter
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -406,7 +407,9 @@ def generate_pdf_report(md_text: str, out_path: Path):
                 elements.append(Paragraph(line_str[3:], h2_style))
                 elements.append(Spacer(1, 4))
             elif line_str:
-                elements.append(Paragraph(line_str.replace("**", "<b>").replace("`", ""), normal))
+                formatted_line = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", line_str).replace("`", "")
+                formatted_line = re.sub(r"<span[^>]*>", "", formatted_line).replace("</span>", "")
+                elements.append(Paragraph(formatted_line, normal))
                 elements.append(Spacer(1, 3))
 
         doc.build(elements)

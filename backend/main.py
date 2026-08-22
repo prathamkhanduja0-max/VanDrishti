@@ -27,7 +27,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import API_DESCRIPTION, API_TITLE, API_VERSION, CORS_ORIGINS
 from backend.database import init_db
-from backend.routers import assessment, fire, gis, process, upload
+from backend.routers import assessment, diversion, fire, gis, process, upload
 
 # Initialize database
 init_db()
@@ -56,6 +56,7 @@ app.include_router(process.router)
 app.include_router(gis.router)
 app.include_router(fire.router)
 app.include_router(assessment.router)
+app.include_router(diversion.router)
 
 
 @app.get("/", tags=["Health"])

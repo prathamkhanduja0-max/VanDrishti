@@ -61,6 +61,12 @@ export const apiService = {
     return fetchWithFallback(`${API_BASE}/gis/assessment?site=${site}`, `/data/${key}_assessment.json`);
   },
 
+  getDiversionAssessment: (site = 'OSBS_large_2019') => {
+    const encodedSite = encodeURIComponent(site);
+    const key = site.toLowerCase().includes('teak') ? 'teak' : 'osbs';
+    return fetchWithFallback(`${API_BASE}/diversion/assessment?site=${encodedSite}`, `/data/${key}_diversion_assessment.json`);
+  },
+
   // Pipeline Job Trigger & Status
   triggerProcess: async (params = {}) => {
     const res = await fetch(`${API_BASE}/process`, {
