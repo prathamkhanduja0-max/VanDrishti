@@ -262,6 +262,7 @@ function AppDashboard({ user, logout }) {
   const [alertsExpanded, setAlertsExpanded] = useState(true);
   const [inspectorExpanded, setInspectorExpanded] = useState(true);
   const [stopsExpanded, setStopsExpanded] = useState(true);
+  const [lastMainNav, setLastMainNav] = useState('Overview');
 
   // OSBS 250m Study Area Center in WGS84
   const mapCenter = useMemo(() => [29.681510, -81.952647], []);
@@ -767,8 +768,21 @@ function AppDashboard({ user, logout }) {
                 <button
                   key={item.id}
                   onClick={() => {
-                    setActiveNav(item.id);
-                    if (item.id !== 'Analyze Your Forest') {
+                    if (item.id === 'Analyze Your Forest') {
+                      if (activeNav === 'Analyze Your Forest') {
+                        // Toggle OFF -> return to last selected main nav
+                        setActiveNav(lastMainNav && lastMainNav !== 'Analyze Your Forest' ? lastMainNav : 'Overview');
+                      } else {
+                        // Toggle ON -> open Module Capability Report
+                        if (activeNav !== 'Analyze Your Forest') {
+                          setLastMainNav(activeNav);
+                        }
+                        setActiveNav('Analyze Your Forest');
+                        setModuleReportOpen(true);
+                      }
+                    } else {
+                      setLastMainNav(item.id);
+                      setActiveNav(item.id);
                       handleResetP2P();
                     }
                   }}
@@ -925,19 +939,12 @@ function AppDashboard({ user, logout }) {
           {activeNav === 'Analyze Your Forest' ? (
             <div className="analyzer-container">
               {/* Left Panel: Upload & Capability Report */}
-              <div className={`analyzer-sidebar ${!moduleReportOpen ? 'collapsed' : ''}`}>
+              <div className="analyzer-sidebar">
                 <div className="analyzer-sidebar-header">
                   <div className="analyzer-header-title">
                     <UploadCloud size={18} style={{ color: '#34d399' }} />
                     <span>Module Capability Report</span>
                   </div>
-                  <button
-                    className="panel-close-btn"
-                    onClick={() => setModuleReportOpen(false)}
-                    title="Collapse Module Capability Report"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
                 </div>
                 <div className="analyzer-header-sub">
                   Supply your own GeoTIFF to inspect georeferencing, spatial resolution, and get an honest capability assessment.
@@ -1115,18 +1122,6 @@ function AppDashboard({ user, logout }) {
 
               {/* Right Panel: Live Map for Uploaded Raster Results */}
               <div className="analyzer-map-wrap">
-                {/* Floating Reopen Vertical Tab for Collapsed Module Capability Report */}
-                {!moduleReportOpen && (
-                  <button
-                    className="drawer-reopen-tab left"
-                    onClick={() => setModuleReportOpen(true)}
-                    title="Open Module Capability Report"
-                    aria-label="Open Module Capability Report"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
-                )}
-
                 {/* P2P HUD OVERLAY ON UPLOAD MAP */}
                 {p2pEnabled && (
                   <div className="p2p-hud-overlay">
