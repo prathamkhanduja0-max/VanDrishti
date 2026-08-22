@@ -2070,28 +2070,17 @@ function AppDashboard({ user, logout }) {
                   <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />
                 </button>
               )}
-              {/* Floating Reopen Handles on Map for Collapsed Right Panel */}
+              {/* Floating Reopen Handle on Map for Collapsed Right Panel */}
               {!rightPanelOpen && activeNav !== 'Analyze Your Forest' && (
-                <>
-                  <div
-                    className="edge-pull-tab right"
-                    onClick={() => setRightPanelOpen(true)}
-                    title="Click to pull out Audit & Inspector Drawer"
-                  >
-                    <ChevronLeft size={16} />
-                    <span className="edge-pull-label">AUDIT DRAWER</span>
-                  </div>
-
-                  <button
-                    className="floating-reopen-btn right"
-                    onClick={() => setRightPanelOpen(true)}
-                    title="Expand Audit & Inspector Panel"
-                  >
-                    <ChevronLeft size={13} style={{ color: 'var(--vd-pale)' }} />
-                    <ShieldAlert size={14} style={{ color: 'var(--vd-pale)' }} />
-                    <span>Audit & Alerts</span>
-                  </button>
-                </>
+                <button
+                  className="floating-reopen-btn right"
+                  onClick={() => setRightPanelOpen(true)}
+                  title="Expand Audit & Inspector Panel"
+                >
+                  <ChevronLeft size={13} style={{ color: 'var(--vd-pale)' }} />
+                  <ShieldAlert size={14} style={{ color: 'var(--vd-pale)' }} />
+                  <span>Audit & Alerts</span>
+                </button>
               )}
             </div>
           )}
@@ -2099,6 +2088,19 @@ function AppDashboard({ user, logout }) {
           {/* ========================================================================= */}
           {/* 3. RIGHT PANEL (COMPACT COLLAPSIBLE DRAWER)                               */}
           {/* ========================================================================= */}
+          {/* Persistent Docked Reopen Tab for Collapsed Audit & Inspector Drawer */}
+          {!rightPanelOpen && (
+            <button
+              className="drawer-reopen-tab right"
+              onClick={() => setRightPanelOpen(true)}
+              title="Expand Audit & Inspector Panel"
+              aria-label="Expand Audit & Inspector Panel"
+            >
+              <ChevronLeft size={16} />
+              <ShieldAlert size={12} style={{ color: 'var(--vd-pale)' }} />
+            </button>
+          )}
+
           <div className={`right-panel ${!rightPanelOpen ? 'collapsed' : ''}`}>
             <div className="right-panel-topbar">
               <div className="right-panel-title">

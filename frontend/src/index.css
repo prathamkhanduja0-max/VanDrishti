@@ -916,13 +916,34 @@ html, body {
 
 .drawer-reopen-tab.left {
   left: 0;
+  border-left: none;
+  border-radius: 0 var(--vd-radius-sm) var(--vd-radius-sm) 0;
+  box-shadow: 2px 4px 16px rgba(31, 71, 71, 0.2);
+}
+
+.drawer-reopen-tab.right {
+  right: 0;
+  left: auto;
+  border-right: none;
+  border-left: 1px solid var(--vd-mint);
+  border-radius: var(--vd-radius-sm) 0 0 var(--vd-radius-sm);
+  box-shadow: -2px 4px 16px rgba(31, 71, 71, 0.25);
+  width: 26px;
+  height: 64px;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .drawer-reopen-tab:hover {
   background-color: #3b7474;
   color: #ffffff;
   border-color: var(--vd-pale);
-  width: 28px;
+  width: 30px;
+}
+
+.drawer-reopen-tab.right:hover {
+  width: 32px;
+  transform: translateY(-50%) translateX(-2px);
 }
 
 .drawer-reopen-tab:active {
