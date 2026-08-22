@@ -629,7 +629,7 @@ html, body {
   border-left: 1px solid var(--vd-border-subtle);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   overflow-y: auto;
   z-index: 20;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
@@ -690,7 +690,9 @@ html, body {
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
   gap: 12px;
+  flex: 1;
 }
 
 .panel-section {
@@ -837,6 +839,7 @@ html, body {
 }
 
 .honesty-footer {
+  margin-top: auto;
   padding: 10px 14px;
   border-top: 1px solid var(--vd-border-subtle);
   background-color: #eef7ea;
