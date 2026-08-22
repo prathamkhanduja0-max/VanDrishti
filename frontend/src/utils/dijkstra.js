@@ -199,9 +199,13 @@ export function computePointToPointPath(costSurface, startLatLng, endLatLng) {
           const avgCost = (grid[r][c] + grid[pr][pc]) / 2.0;
           totalMinutes += avgCost * (stepM / 1000.0) * 60.0;
         } else {
-          // ExG fallback at standard 4.0 km/h walking speed
+          // ExG-only fallback:
+          // Tobler evaluated at zero slope: v(0) = 6 * exp(-3.5 * 0.05) = 5.0367 km/h = 83.9457 m/min.
+          // This is used as a base rate only for flat-ground consistency -- not Tobler applied to a slope surface.
+          // Note: w_veg multiplier is uncalibrated without field timing data; times are relative indices.
+          const TOBLER_FLAT_BASE_SPEED_MPM = (6.0 * Math.exp(-3.5 * 0.05) * 1000.0) / 60.0; // 83.9457 m/min (5.0367 km/h)
           const avgExg = (grid[r][c] + grid[pr][pc]) / 2.0;
-          const speedMpm = 66.7 / avgExg;
+          const speedMpm = TOBLER_FLAT_BASE_SPEED_MPM / avgExg;
           totalMinutes += stepM / speedMpm;
         }
       }

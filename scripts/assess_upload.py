@@ -151,16 +151,22 @@ def _normalize_to_8bit(arr: np.ndarray) -> np.ndarray:
 
 
 def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
+<<<<<<< HEAD
+                            render_cap: int = 3000) -> Dict[str, Any]:
+=======
                             render_cap: int = 3000,
                             min_crown_sep_m: float = 2.0,
                             exg_percentile: float = 65.0,
                             min_green_dn: float = 30.0) -> Dict[str, Any]:
+>>>>>>> main
     """Fast optical crown-peak preview (ExG local maxima) for uploaded rasters.
 
     NOTE: This is NOT the DeepForest/YOLOv8 detector used by the main pipeline. It is an
     unsupervised greenness-peak heuristic intended only for instant upload feedback.
     Counts are not calibrated crown counts and carry no validation.
 
+<<<<<<< HEAD
+=======
     Peak separation is specified in GROUND METRES (`min_crown_sep_m`) and converted to a
     pixel window using the raster's own resolution, matching the 2 m centroid dedup used by
     the main detection pipeline. A fixed pixel window would make the count a function of
@@ -174,6 +180,7 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
     rasters of different ground resolution are therefore NOT directly comparable, and
     `resolution_normalized` denotes the window basis only, not a validated invariance claim.
 
+>>>>>>> main
     `render_cap` limits how many features are serialised to GeoJSON for browser rendering,
     but the full peak count is always reported separately so the number shown to the user
     is never a truncation artifact. Retained peaks are selected by descending ExG strength
@@ -185,7 +192,10 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
         crs = src.crs
         transform = src.transform
         count = src.count
+<<<<<<< HEAD
+=======
         native_res_m = (abs(transform.a) + abs(transform.e)) / 2.0 if is_projected else None
+>>>>>>> main
 
         # Read RGB bands
         if count >= 3:
@@ -195,8 +205,12 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
             rgb = np.stack([band1, band1, band1], axis=0)
         else:
             return {"count": 0, "count_rendered": 0, "features": [], "geojson": None,
+<<<<<<< HEAD
+                    "truncated": False, "method": "exg_peak_heuristic"}
+=======
                     "truncated": False, "method": "exg_peak_heuristic",
                     "resolution_normalized": False}
+>>>>>>> main
 
         # Rescale to 8-bit-equivalent so the brightness gate is dtype-independent
         rgb = _normalize_to_8bit(rgb)
@@ -225,9 +239,15 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
 
         # Local peak detection for crown centers
         from scipy.ndimage import maximum_filter
+<<<<<<< HEAD
+        threshold = np.percentile(exg[exg > 0], 65) if np.any(exg > 0) else 10.0
+        local_max = maximum_filter(exg, size=5) == exg
+        peaks = (exg > threshold) & local_max & (g > 30.0)
+=======
         threshold = np.percentile(exg[exg > 0], exg_percentile) if np.any(exg > 0) else 10.0
         local_max = maximum_filter(exg, size=win) == exg
         peaks = (exg > threshold) & local_max & (g > min_green_dn)
+>>>>>>> main
 
         y_indices, x_indices = np.where(peaks)
         total_peaks = int(y_indices.size)
@@ -283,6 +303,8 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
             "count_rendered": len(features),
             "truncated": truncated,
             "method": "exg_peak_heuristic",
+<<<<<<< HEAD
+=======
             "resolution_normalized": scale_invariant,
             "params": {
                 "min_crown_sep_m": min_crown_sep_m,
@@ -292,6 +314,7 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
                 "min_green_dn": min_green_dn,
                 "subsample_step": step,
             },
+>>>>>>> main
             "geojson": geojson_data,
         }
 
@@ -470,6 +493,11 @@ def assess_upload(
         "warnings": warnings,
         "detection_results": {
             "count": detection_results.get("count", 0),
+<<<<<<< HEAD
+            "count_rendered": detection_results.get("count_rendered", 0),
+            "truncated": detection_results.get("truncated", False),
+            "method": detection_results.get("method", "exg_peak_heuristic"),
+=======
             "raw_count": detection_results.get("raw_count", detection_results.get("count", 0)),
             "count_rendered": detection_results.get("count_rendered", detection_results.get("count", 0)),
             "truncated": detection_results.get("truncated", False),
@@ -480,6 +508,7 @@ def assess_upload(
             "detector_params": detection_results.get("detector_params", {}),
             "notes": detection_results.get("notes", []),
             "params": detection_results.get("params", {}),
+>>>>>>> main
             "error": detection_results.get("error"),
             "geojson": detection_results.get("geojson")
         }

@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   Info,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   ChevronUp,
   Radio,
@@ -43,10 +44,15 @@ import {
   ArrowUpRight,
   Route,
   RotateCcw,
-  X
+  X,
+  Plus,
+  LogOut
 } from 'lucide-react';
 import { computePointToPointPath } from './utils/dijkstra';
 import { apiService } from './services/api';
+import { useAuth } from './context/AuthContext';
+import LoginPage from './components/LoginPage';
+
 
 // Custom Marker Icons for Route Stops and Entry Point
 const createStopIcon = (number, bg = '#ef4444') => {
@@ -168,7 +174,41 @@ function MapClickHandler({ p2pEnabled, onMapClick }) {
   return null;
 }
 
+// Automatically recalculates map boundaries and tile layout during panel transitions
+function MapInvalidateResizer({ trigger }) {
+  const map = useMap();
+  useEffect(() => {
+    map.invalidateSize();
+    const t1 = setTimeout(() => map.invalidateSize(), 150);
+    const t2 = setTimeout(() => map.invalidateSize(), 350);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [map, trigger]);
+  return null;
+}
+
 export default function App() {
+  const { user, loading: authLoading, logout } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div style={{ minHeight: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#060e0a', gap: '16px' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid #143624', borderTopColor: '#34d399', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ color: '#64748b', fontSize: '13px', fontWeight: 500 }}>Loading VanDrishti…</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
+
+  return <AppDashboard user={user} logout={logout} />;
+}
+
+function AppDashboard({ user, logout }) {
   const [activeNav, setActiveNav] = useState('Overview');
   const [basemap, setBasemap] = useState('satellite'); // 'satellite' | 'dark'
 
@@ -216,6 +256,11 @@ export default function App() {
   });
 
   const [layersOpen, setLayersOpen] = useState(true);
+  const [moduleReportOpen, setModuleReportOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [alertsExpanded, setAlertsExpanded] = useState(true);
+  const [inspectorExpanded, setInspectorExpanded] = useState(true);
+  const [stopsExpanded, setStopsExpanded] = useState(true);
 
   // OSBS 250m Study Area Center in WGS84
   const mapCenter = useMemo(() => [29.681510, -81.952647], []);
@@ -249,66 +294,33 @@ export default function App() {
           osbsCostRes,
           teakCostRes
         ] = await Promise.all([
-          fetch('/data/OSBS_large_2019_boundary.geojson').then((r) => {
-            if (!r.ok) throw new Error('Failed to load boundary geojson');
-            return r.json();
-          }),
-          fetch('/data/OSBS_large_2019_trees_chm_valid.geojson').then((r) => {
-            if (!r.ok) throw new Error('Failed to load validated trees geojson');
-            return r.json();
-          }),
-          fetch('/data/OSBS_large_2019_verification_priority.geojson').then((r) => {
-            if (!r.ok) throw new Error('Failed to load priority geojson');
-            return r.json();
-          }),
-          fetch('/data/route_terrain.geojson').then((r) => {
-            if (!r.ok) throw new Error('Failed to load terrain route geojson');
-            return r.json();
-          }),
-          fetch('/data/OSBS_large_2019_field_route_lcp_optimized.geojson').then((r) => {
-            if (!r.ok) return null;
-            return r.json();
-          }),
-          fetch('/data/forest_health_grid.geojson').then((r) => {
-            if (!r.ok) throw new Error('Failed to load forest health grid geojson');
-            return r.json();
-          }),
-          fetch('/data/chm_loss_polygons.geojson').then((r) => {
-            if (!r.ok) throw new Error('Failed to load degradation polygons geojson');
-            return r.json();
-          }),
-          fetch('/data/fire_hotspots_osbs_live.geojson').then((r) => {
-            if (!r.ok) throw new Error('Failed to load fire hotspots geojson');
-            return r.json();
-          }),
-          fetch('/data/teak_assessment.json').then((r) => {
-            if (!r.ok) return null;
-            return r.json();
-          }),
-          fetch('/data/osbs_cost_surface.json').then((r) => {
-            if (!r.ok) return null;
-            return r.json();
-          }),
-          fetch('/data/teak_cost_surface.json').then((r) => {
-            if (!r.ok) return null;
-            return r.json();
-          }),
+          apiService.getBoundary('OSBS_large_2019'),
+          apiService.getTrees('OSBS_large_2019'),
+          apiService.getPriority('OSBS_large_2019'),
+          apiService.getTerrainRoute('OSBS_large_2019'),
+          apiService.getLegacyRoute('OSBS_large_2019'),
+          apiService.getHealthGrid('OSBS_large_2019'),
+          apiService.getDegradation('OSBS_large_2019'),
+          apiService.getFireHotspots('osbs_live'),
+          apiService.getAssessment('teak'),
+          apiService.getCostSurface('osbs'),
+          apiService.getCostSurface('teak'),
         ]);
 
-        setBoundaryData(bRes);
-        setTreesData(tRes);
-        setPriorityData(pRes);
-        setTerrainRouteData(trRes);
-        setLegacyRouteData(lrRes);
-        setHealthGridData(hgRes);
-        setDegradationData(degRes);
-        setFireHotspotsData(fRes);
+        if (bRes) setBoundaryData(bRes);
+        if (tRes) setTreesData(tRes);
+        if (pRes) setPriorityData(pRes);
+        if (trRes) setTerrainRouteData(trRes);
+        if (lrRes) setLegacyRouteData(lrRes);
+        if (hgRes) setHealthGridData(hgRes);
+        if (degRes) setDegradationData(degRes);
+        if (fRes) setFireHotspotsData(fRes);
         if (teakAssRes) setUploadedAssessment(teakAssRes);
         if (osbsCostRes) setOsbsCostSurface(osbsCostRes);
         if (teakCostRes) setTeakCostSurface(teakCostRes);
         setLoading(false);
       } catch (err) {
-        console.error('Error loading GeoJSON layers:', err);
+        console.error('Error loading GeoJSON layers via API:', err);
         setError(err.message);
         setLoading(false);
       }
@@ -463,11 +475,12 @@ export default function App() {
         setActiveCostSurface(costData);
       }
     } catch (e) {
-      console.error('Error loading preset assessment:', e);
+      console.error('Error loading preset assessment via API:', e);
     } finally {
       setUploadLoading(false);
     }
   };
+
 
   // Handle Real File Upload in "Analyze Your Forest"
   const handleFileUpload = async (event) => {
@@ -637,6 +650,39 @@ export default function App() {
             </div>
           </div>
 
+          {/* User Profile */}
+          <div style={{
+            padding: '10px 16px',
+            borderBottom: '1px solid #143624',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: 'rgba(16, 185, 129, 0.04)',
+          }}>
+            <img
+              src={user.photoURL || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.displayName || 'U') + '&background=10b981&color=fff&size=32'}
+              alt="avatar"
+              style={{ width: '30px', height: '30px', borderRadius: '50%', border: '2px solid #1e5c3a', flexShrink: 0 }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user.displayName || 'User'}
+              </div>
+              <div style={{ fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user.email}
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              style={{ background: 'none', border: '1px solid #1e3a2a', borderRadius: '6px', padding: '5px', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', flexShrink: 0 }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.color = '#f87171'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1e3a2a'; e.currentTarget.style.color = '#94a3b8'; }}
+            >
+              <LogOut size={14} />
+            </button>
+          </div>
+
           {/* Scope Card */}
           <div className="scope-badge-card">
             <div className="scope-badge-title">
@@ -644,7 +690,7 @@ export default function App() {
               <span>OSBS Study Area</span>
             </div>
             <div className="scope-badge-desc">
-              Ordway-Swisher, FL • 250m × 250m (6.25 ha, NEON LiDAR & AOP)
+              250m × 250m (6.25 ha, NEON LiDAR & AOP)
             </div>
           </div>
 
@@ -706,12 +752,9 @@ export default function App() {
         <header className="topbar">
           <div className="topbar-title-wrap">
             <h2>
-              <span>VanDrishti — OSBS 250m Study Area (Ordway-Swisher, FL)</span>
+              <span>VanDrishti</span>
               <span className="prototype-tag">250m × 250m (6.25 ha)</span>
             </h2>
-            <div className="topbar-sub">
-              NEON Airborne Observation Platform (AOP) • LiDAR CHM & DTM • NASA FIRMS VIIRS • Held-Karp Terrain TSP
-            </div>
           </div>
 
           <div className="topbar-actions">
@@ -828,15 +871,22 @@ export default function App() {
           {activeNav === 'Analyze Your Forest' ? (
             <div className="analyzer-container">
               {/* Left Panel: Upload & Capability Report */}
-              <div className="analyzer-sidebar">
-                <div>
+              <div className={`analyzer-sidebar ${!moduleReportOpen ? 'collapsed' : ''}`}>
+                <div className="analyzer-sidebar-header">
                   <div className="analyzer-header-title">
-                    <UploadCloud size={20} style={{ color: '#34d399' }} />
-                    <span>Raster Capability Evaluator</span>
+                    <UploadCloud size={18} style={{ color: '#34d399' }} />
+                    <span>Module Capability Report</span>
                   </div>
-                  <div className="analyzer-header-sub">
-                    Supply your own GeoTIFF to inspect georeferencing, spatial resolution, and get an honest capability assessment.
-                  </div>
+                  <button
+                    className="panel-close-btn"
+                    onClick={() => setModuleReportOpen(false)}
+                    title="Collapse Module Capability Report"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                </div>
+                <div className="analyzer-header-sub">
+                  Supply your own GeoTIFF to inspect georeferencing, spatial resolution, and get an honest capability assessment.
                 </div>
 
                 {/* Upload Control */}
@@ -1010,7 +1060,20 @@ export default function App() {
               </div>
 
               {/* Right Panel: Live Map for Uploaded Raster Results */}
-              <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+              <div className="analyzer-map-wrap">
+                {/* Floating Reopen Button for Collapsed Module Capability Report */}
+                {!moduleReportOpen && (
+                  <button
+                    className="floating-reopen-btn left"
+                    onClick={() => setModuleReportOpen(true)}
+                    title="Open Module Capability Report"
+                  >
+                    <Plus size={14} style={{ color: '#34d399' }} />
+                    <span>Module Report</span>
+                    <ChevronRight size={13} style={{ color: '#94a3b8' }} />
+                  </button>
+                )}
+
                 {/* P2P HUD OVERLAY ON UPLOAD MAP */}
                 {p2pEnabled && (
                   <div className="p2p-hud-overlay">
@@ -1045,28 +1108,36 @@ export default function App() {
 
                     {/* Metric Outputs */}
                     {p2pRouteResult && (
-                      <div className="p2p-metrics-grid">
-                        <div className="p2p-metric-item">
-                          <span className="p2p-metric-label">Path Length</span>
-                          <span className="p2p-metric-val">
-                            {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}
-                          </span>
-                        </div>
-                        <div className="p2p-metric-item">
-                          <span className="p2p-metric-label">Estimated Time</span>
-                          <span className="p2p-metric-val">
-                            {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
-                          </span>
-                        </div>
-                        {!p2pRouteResult.is_projected && (
-                          <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
-                            <span className="p2p-metric-label">Pixel Distance</span>
-                            <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
-                              {p2pRouteResult.pixel_distance} px (Unprojected)
+                      <>
+                        <div className="p2p-metrics-grid">
+                          <div className="p2p-metric-item">
+                            <span className="p2p-metric-label">Path Length</span>
+                            <span className="p2p-metric-val">
+                              {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}
                             </span>
                           </div>
+                          <div className="p2p-metric-item">
+                            <span className="p2p-metric-label">Estimated Time</span>
+                            <span className="p2p-metric-val">
+                              {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                            </span>
+                          </div>
+                          {!p2pRouteResult.is_projected && (
+                            <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
+                              <span className="p2p-metric-label">Pixel Distance</span>
+                              <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
+                                {p2pRouteResult.pixel_distance} px (Unprojected)
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {p2pRouteResult.mode_label?.includes('ExG') && (
+                          <div style={{ fontSize: '9.5px', color: '#fbbf24', background: 'rgba(69, 26, 3, 0.6)', border: '1px solid #d97706', borderRadius: '4px', padding: '4px 6px', lineHeight: '1.3' }}>
+                            ⚠️ <b>Uncalibrated Proxy:</b> w_veg multiplier lacks field timing data. ExG-only travel times are relative impedance indices, not field-validated predictions.
+                          </div>
                         )}
-                      </div>
+                      </>
                     )}
                     <div className="p2p-actions">
                       <button onClick={handleResetP2P} className="p2p-action-btn">
@@ -1104,6 +1175,7 @@ export default function App() {
                     center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
                     zoom={selectedUploadPreset === 'teak' ? 19 : 17}
                   />
+                  <MapInvalidateResizer trigger={`${moduleReportOpen}-${selectedUploadPreset}`} />
 
                   {/* Click Listener for P2P Dijkstra */}
                   <MapClickHandler p2pEnabled={p2pEnabled && activeCostSurface?.routable !== false} onMapClick={handleMapPointClick} />
@@ -1285,28 +1357,36 @@ export default function App() {
 
                   {/* Metric Outputs */}
                   {p2pRouteResult && (
-                    <div className="p2p-metrics-grid">
-                      <div className="p2p-metric-item">
-                        <span className="p2p-metric-label">Path Length</span>
-                        <span className="p2p-metric-val">
-                          {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}
-                        </span>
-                      </div>
-                      <div className="p2p-metric-item">
-                        <span className="p2p-metric-label">Estimated Time</span>
-                        <span className="p2p-metric-val">
-                          {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
-                        </span>
-                      </div>
-                      {!p2pRouteResult.is_projected && (
-                        <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
-                          <span className="p2p-metric-label">Pixel Distance</span>
-                          <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
-                            {p2pRouteResult.pixel_distance} px (Unprojected)
+                    <>
+                      <div className="p2p-metrics-grid">
+                        <div className="p2p-metric-item">
+                          <span className="p2p-metric-label">Path Length</span>
+                          <span className="p2p-metric-val">
+                            {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}
                           </span>
                         </div>
+                        <div className="p2p-metric-item">
+                          <span className="p2p-metric-label">Estimated Time</span>
+                          <span className="p2p-metric-val">
+                            {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                          </span>
+                        </div>
+                        {!p2pRouteResult.is_projected && (
+                          <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
+                            <span className="p2p-metric-label">Pixel Distance</span>
+                            <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
+                              {p2pRouteResult.pixel_distance} px (Unprojected)
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {p2pRouteResult.mode_label?.includes('ExG') && (
+                        <div style={{ fontSize: '9.5px', color: '#fbbf24', background: 'rgba(69, 26, 3, 0.6)', border: '1px solid #d97706', borderRadius: '4px', padding: '4px 6px', lineHeight: '1.3' }}>
+                          ⚠️ <b>Uncalibrated Proxy:</b> w_veg multiplier lacks field timing data. ExG-only travel times are relative impedance indices, not field-validated predictions.
+                        </div>
                       )}
-                    </div>
+                    </>
                   )}
 
                   <div className="p2p-actions">
@@ -1357,6 +1437,7 @@ export default function App() {
                 style={{ height: '100%', width: '100%', cursor: p2pEnabled ? 'crosshair' : 'default' }}
               >
                 <MapController center={currentCenter} zoom={currentZoom} onZoomChange={handleZoomChange} />
+                <MapInvalidateResizer trigger={`${rightPanelOpen}-${layersOpen}-${activeNav}`} />
 
                 {/* Click Listener for P2P Dijkstra */}
                 <MapClickHandler p2pEnabled={p2pEnabled} onMapClick={handleMapPointClick} />
@@ -1795,182 +1876,241 @@ export default function App() {
                   <ChevronDown size={13} style={{ color: '#94a3b8' }} />
                 </button>
               )}
+              {/* Floating Reopen Button on Map for Collapsed Right Panel */}
+              {!rightPanelOpen && activeNav !== 'Analyze Your Forest' && (
+                <button
+                  className="floating-reopen-btn right"
+                  onClick={() => setRightPanelOpen(true)}
+                  title="Expand Audit & Inspector Panel"
+                >
+                  <ChevronLeft size={13} style={{ color: '#94a3b8' }} />
+                  <ShieldAlert size={14} style={{ color: '#34d399' }} />
+                  <span>Audit & Alerts</span>
+                </button>
+              )}
             </div>
           )}
 
           {/* ========================================================================= */}
-          {/* 3. RIGHT PANEL (ALERTS, ITINERARY, INSPECTOR)                             */}
+          {/* 3. RIGHT PANEL (COMPACT COLLAPSIBLE DRAWER)                               */}
           {/* ========================================================================= */}
-          <div className="right-panel">
+          <div className={`right-panel ${!rightPanelOpen ? 'collapsed' : ''}`}>
+            <div className="right-panel-topbar">
+              <div className="right-panel-title">
+                <ShieldAlert size={14} style={{ color: '#34d399' }} />
+                <span>Audit & Inspector</span>
+              </div>
+              <button
+                className="panel-close-btn"
+                onClick={() => setRightPanelOpen(false)}
+                title="Collapse Panel"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
             <div className="right-panel-content">
               {/* RECENT ALERTS */}
-              <div>
-                <div className="section-heading">
-                  <ShieldAlert size={15} style={{ color: '#34d399' }} />
-                  <span>Real-Time Audit & Alerts</span>
+              <div className="panel-section">
+                <div
+                  className="section-heading"
+                  onClick={() => setAlertsExpanded(!alertsExpanded)}
+                  style={{ cursor: 'pointer', justifyContent: 'space-between' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ShieldAlert size={14} style={{ color: '#34d399' }} />
+                    <span>Real-Time Audit & Alerts</span>
+                  </div>
+                  {alertsExpanded ? <ChevronUp size={13} style={{ color: '#94a3b8' }} /> : <ChevronDown size={13} style={{ color: '#94a3b8' }} />}
                 </div>
 
-                <div className="alert-card priority">
-                  <div className="alert-title">
-                    <AlertTriangle size={14} />
-                    <span>{stats.highPriority} Mandatory Ground Stops</span>
-                  </div>
-                  <div className="alert-text">
-                    All {stats.highPriority} HIGH-priority trees fall within the project corridor and require ground truth verification.
-                  </div>
-                </div>
+                {alertsExpanded && (
+                  <div className="collapsible-section-content">
+                    <div className="alert-card priority">
+                      <div className="alert-title">
+                        <AlertTriangle size={13} />
+                        <span>{stats.highPriority} Mandatory Ground Stops</span>
+                      </div>
+                      <div className="alert-text">
+                        All {stats.highPriority} HIGH-priority trees fall within the project corridor and require ground truth verification.
+                      </div>
+                    </div>
 
-                <div className="alert-card route">
-                  <div className="alert-title">
-                    <Navigation size={14} />
-                    <span>Terrain TSP: {stats.terrainDist}m ({stats.terrainTime} min)</span>
-                  </div>
-                  <div className="alert-text">
-                    Held-Karp terrain-aware TSP saved {stats.terrainSaved} min traversal time vs nearest-neighbor baseline.
-                  </div>
-                </div>
+                    <div className="alert-card route">
+                      <div className="alert-title">
+                        <Navigation size={13} />
+                        <span>Terrain TSP: {stats.terrainDist}m ({stats.terrainTime} min)</span>
+                      </div>
+                      <div className="alert-text">
+                        Held-Karp terrain TSP saved {stats.terrainSaved} min traversal time vs nearest-neighbor.
+                      </div>
+                    </div>
 
-                <div className="alert-card fire">
-                  <div className="alert-title">
-                    <Scissors size={14} />
-                    <span>{stats.totalDegPolygons} Canopy Loss Zones</span>
+                    <div className="alert-card fire">
+                      <div className="alert-title">
+                        <Scissors size={13} />
+                        <span>{stats.totalDegPolygons} Canopy Loss Zones</span>
+                      </div>
+                      <div className="alert-text">
+                        {stats.removalCount} severe removal (ΔH ≤ -5m) & {stats.thinningCount} thinning polygons via LiDAR differencing.
+                      </div>
+                    </div>
                   </div>
-                  <div className="alert-text">
-                    {stats.removalCount} severe removal polygons (ΔH ≤ -5m) and {stats.thinningCount} thinning polygons detected via LiDAR differencing.
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* FEATURE INSPECTOR */}
-              <div>
-                <div className="section-heading">
-                  <Info size={15} style={{ color: '#34d399' }} />
-                  <span>Feature Inspector</span>
-                </div>
-                {selectedFeature ? (
-                  <div className="inspector-card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#34d399', borderBottom: '1px solid #143624', paddingBottom: '4px', marginBottom: '6px' }}>
-                      <span>TYPE: {selectedFeature.type.toUpperCase()}</span>
-                      <button onClick={() => setSelectedFeature(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>
-                        Clear
-                      </button>
-                    </div>
-
-                    {selectedFeature.type === 'tree' && (
-                      <div>
-                        <div className="inspector-row"><span className="inspector-key">Tree ID:</span><span className="inspector-val">#{selectedFeature.properties.tree_id}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Priority:</span><span className="inspector-val" style={{ color: selectedFeature.properties.verification_priority === 'HIGH' ? '#f87171' : '#fbbf24' }}>{selectedFeature.properties.verification_priority}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Confidence:</span><span className="inspector-val">{(selectedFeature.properties.confidence * 100).toFixed(1)}%</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Inside Corridor:</span><span className="inspector-val">{selectedFeature.properties.inside_boundary ? 'YES (AFFECTED)' : 'NO (SAFE)'}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">UTM Easting:</span><span className="inspector-val">{selectedFeature.properties.geo_easting}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">UTM Northing:</span><span className="inspector-val">{selectedFeature.properties.geo_northing}</span></div>
-                        <div style={{ fontSize: '10px', color: '#cbd5e1', marginTop: '6px', fontStyle: 'italic' }}>{selectedFeature.properties.priority_reason}</div>
-                      </div>
-                    )}
-
-                    {selectedFeature.type === 'health_cell' && (
-                      <div>
-                        <div className="inspector-row"><span className="inspector-key">Cell ID:</span><span className="inspector-val">{selectedFeature.properties.cell_id}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Grade:</span><span className="inspector-val" style={{ color: getHealthGradeColor(selectedFeature.properties.grade), fontWeight: 'bold' }}>Grade {selectedFeature.properties.grade}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Health Score:</span><span className="inspector-val">{selectedFeature.properties.score !== null ? Number(selectedFeature.properties.score).toFixed(1) : 'N/A'} / 100</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Canopy Cover:</span><span className="inspector-val">{(selectedFeature.properties.canopy_cover * 100).toFixed(1)}%</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Height Diversity (σ):</span><span className="inspector-val">{selectedFeature.properties.structural_diversity} m</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Loss Density:</span><span className="inspector-val">{(selectedFeature.properties.loss_density * 100).toFixed(2)}%</span></div>
-                      </div>
-                    )}
-
-                    {selectedFeature.type === 'degradation' && (
-                      <div>
-                        <div className="inspector-row"><span className="inspector-key">Class:</span><span className="inspector-val" style={{ color: selectedFeature.properties.class_name === 'removal' ? '#ef4444' : '#fb923c', fontWeight: 'bold' }}>{selectedFeature.properties.class_name ? selectedFeature.properties.class_name.toUpperCase() : 'LOSS'}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Impact Area:</span><span className="inspector-val">{selectedFeature.properties.area_m2} m²</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Threshold Tier:</span><span className="inspector-val">{selectedFeature.properties.class_name === 'removal' ? 'ΔH ≤ -5.0 m' : '-5.0m < ΔH ≤ -2.0m'}</span></div>
-                      </div>
-                    )}
-
-                    {(selectedFeature.type === 'route_terrain' || selectedFeature.type === 'route_legacy') && (
-                      <div>
-                        <div className="inspector-row"><span className="inspector-key">Route Model:</span><span className="inspector-val">{selectedFeature.properties.cost_model || 'Held-Karp TSP'}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Physical Dist:</span><span className="inspector-val">{selectedFeature.properties.total_physical_distance_meters} m</span></div>
-                        {selectedFeature.properties.total_travel_time_minutes && (
-                          <div className="inspector-row"><span className="inspector-key">Travel Time:</span><span className="inspector-val">{selectedFeature.properties.total_travel_time_minutes} min</span></div>
-                        )}
-                        <div className="inspector-row"><span className="inspector-key">Stops Count:</span><span className="inspector-val">{selectedFeature.properties.stops_count}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Grid Model:</span><span className="inspector-val">{selectedFeature.properties.grid_dimensions} ({selectedFeature.properties.grid_resolution_meters}m)</span></div>
-                      </div>
-                    )}
-
-                    {selectedFeature.type === 'fire' && (
-                      <div>
-                        <div className="inspector-row"><span className="inspector-key">Hotspot ID:</span><span className="inspector-val">#{selectedFeature.properties.hotspot_id}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">FRP Power:</span><span className="inspector-val">{selectedFeature.properties.frp_mw} MW</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Acq Date:</span><span className="inspector-val">{selectedFeature.properties.acq_date}</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Time:</span><span className="inspector-val">{selectedFeature.properties.acq_time_utc} UTC</span></div>
-                        <div className="inspector-row"><span className="inspector-key">Sensor:</span><span className="inspector-val">VIIRS 375m NRT</span></div>
-                      </div>
-                    )}
+              <div className="panel-section">
+                <div
+                  className="section-heading"
+                  onClick={() => setInspectorExpanded(!inspectorExpanded)}
+                  style={{ cursor: 'pointer', justifyContent: 'space-between' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Info size={14} style={{ color: '#34d399' }} />
+                    <span>Feature Inspector</span>
                   </div>
-                ) : (
-                  <div style={{ fontSize: '10.5px', color: '#64748b', fontStyle: 'italic', padding: '10px', background: '#07130d', borderRadius: '6px', border: '1px solid #143624' }}>
-                    Click on any tree marker, verification stop, health grid cell, degradation zone, or route on the map to inspect spatial attributes.
+                  {inspectorExpanded ? <ChevronUp size={13} style={{ color: '#94a3b8' }} /> : <ChevronDown size={13} style={{ color: '#94a3b8' }} />}
+                </div>
+
+                {inspectorExpanded && (
+                  <div className="collapsible-section-content">
+                    {selectedFeature ? (
+                      <div className="inspector-card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#34d399', borderBottom: '1px solid #143624', paddingBottom: '3px', marginBottom: '5px' }}>
+                          <span>TYPE: {selectedFeature.type.toUpperCase()}</span>
+                          <button onClick={() => setSelectedFeature(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>
+                            Clear
+                          </button>
+                        </div>
+
+                        {selectedFeature.type === 'tree' && (
+                          <div>
+                            <div className="inspector-row"><span className="inspector-key">Tree ID:</span><span className="inspector-val">#{selectedFeature.properties.tree_id}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Priority:</span><span className="inspector-val" style={{ color: selectedFeature.properties.verification_priority === 'HIGH' ? '#f87171' : '#fbbf24' }}>{selectedFeature.properties.verification_priority}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Confidence:</span><span className="inspector-val">{(selectedFeature.properties.confidence * 100).toFixed(1)}%</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Corridor:</span><span className="inspector-val">{selectedFeature.properties.inside_boundary ? 'YES (AFFECTED)' : 'NO (SAFE)'}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">UTM Easting:</span><span className="inspector-val">{selectedFeature.properties.geo_easting}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">UTM Northing:</span><span className="inspector-val">{selectedFeature.properties.geo_northing}</span></div>
+                            <div style={{ fontSize: '9.5px', color: '#cbd5e1', marginTop: '4px', fontStyle: 'italic' }}>{selectedFeature.properties.priority_reason}</div>
+                          </div>
+                        )}
+
+                        {selectedFeature.type === 'health_cell' && (
+                          <div>
+                            <div className="inspector-row"><span className="inspector-key">Cell ID:</span><span className="inspector-val">{selectedFeature.properties.cell_id}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Grade:</span><span className="inspector-val" style={{ color: getHealthGradeColor(selectedFeature.properties.grade), fontWeight: 'bold' }}>Grade {selectedFeature.properties.grade}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Health Score:</span><span className="inspector-val">{selectedFeature.properties.score !== null ? Number(selectedFeature.properties.score).toFixed(1) : 'N/A'} / 100</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Canopy Cover:</span><span className="inspector-val">{(selectedFeature.properties.canopy_cover * 100).toFixed(1)}%</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Height σ:</span><span className="inspector-val">{selectedFeature.properties.structural_diversity} m</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Loss Density:</span><span className="inspector-val">{(selectedFeature.properties.loss_density * 100).toFixed(2)}%</span></div>
+                          </div>
+                        )}
+
+                        {selectedFeature.type === 'degradation' && (
+                          <div>
+                            <div className="inspector-row"><span className="inspector-key">Class:</span><span className="inspector-val" style={{ color: selectedFeature.properties.class_name === 'removal' ? '#ef4444' : '#fb923c', fontWeight: 'bold' }}>{selectedFeature.properties.class_name ? selectedFeature.properties.class_name.toUpperCase() : 'LOSS'}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Impact Area:</span><span className="inspector-val">{selectedFeature.properties.area_m2} m²</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Tier:</span><span className="inspector-val">{selectedFeature.properties.class_name === 'removal' ? 'ΔH ≤ -5.0 m' : '-5.0m < ΔH ≤ -2.0m'}</span></div>
+                          </div>
+                        )}
+
+                        {(selectedFeature.type === 'route_terrain' || selectedFeature.type === 'route_legacy') && (
+                          <div>
+                            <div className="inspector-row"><span className="inspector-key">Route Model:</span><span className="inspector-val">{selectedFeature.properties.cost_model || 'Held-Karp TSP'}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Physical Dist:</span><span className="inspector-val">{selectedFeature.properties.total_physical_distance_meters} m</span></div>
+                            {selectedFeature.properties.total_travel_time_minutes && (
+                              <div className="inspector-row"><span className="inspector-key">Travel Time:</span><span className="inspector-val">{selectedFeature.properties.total_travel_time_minutes} min</span></div>
+                            )}
+                            <div className="inspector-row"><span className="inspector-key">Stops Count:</span><span className="inspector-val">{selectedFeature.properties.stops_count}</span></div>
+                          </div>
+                        )}
+
+                        {selectedFeature.type === 'fire' && (
+                          <div>
+                            <div className="inspector-row"><span className="inspector-key">Hotspot ID:</span><span className="inspector-val">#{selectedFeature.properties.hotspot_id}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">FRP Power:</span><span className="inspector-val">{selectedFeature.properties.frp_mw} MW</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Acq Date:</span><span className="inspector-val">{selectedFeature.properties.acq_date}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Sensor:</span><span className="inspector-val">VIIRS 375m NRT</span></div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '10px', color: '#64748b', fontStyle: 'italic', padding: '8px', background: '#07130d', borderRadius: '6px', border: '1px solid #143624' }}>
+                        Click on any marker, cell, zone, or route on the map to inspect attributes.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* 13 HIGH PRIORITY ITINERARY TABLE */}
-              <div>
-                <div className="section-heading">
-                  <Navigation size={15} style={{ color: '#34d399' }} />
-                  <span>13 Audit Stops (Optimal Sequence)</span>
+              <div className="panel-section">
+                <div
+                  className="section-heading"
+                  onClick={() => setStopsExpanded(!stopsExpanded)}
+                  style={{ cursor: 'pointer', justifyContent: 'space-between' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Navigation size={14} style={{ color: '#34d399' }} />
+                    <span>13 Audit Stops (Sequence)</span>
+                  </div>
+                  {stopsExpanded ? <ChevronUp size={13} style={{ color: '#94a3b8' }} /> : <ChevronDown size={13} style={{ color: '#94a3b8' }} />}
                 </div>
-                <div className="stops-table-card">
-                  {orderedStops.map((st) => (
-                    <div
-                      key={st.stopNum}
-                      className="stops-row"
-                      onClick={() => handleFocusStop(st)}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ background: '#ef4444', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 800 }}>
-                          {st.stopNum}
-                        </span>
-                        <span style={{ fontWeight: 600, color: '#f1f5f9' }}>Tree #{st.treeId}</span>
-                      </div>
-                      <div style={{ color: '#fbbf24', fontFamily: 'JetBrains Mono', fontSize: '10px' }}>
-                        {(st.properties.confidence * 100).toFixed(1)}%
-                      </div>
+
+                {stopsExpanded && (
+                  <div className="collapsible-section-content">
+                    <div className="stops-table-card compact">
+                      {orderedStops.map((st) => (
+                        <div
+                          key={st.stopNum}
+                          className="stops-row"
+                          onClick={() => handleFocusStop(st)}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ background: '#ef4444', color: 'white', width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8.5px', fontWeight: 800 }}>
+                              {st.stopNum}
+                            </span>
+                            <span style={{ fontWeight: 600, color: '#f1f5f9' }}>Tree #{st.treeId}</span>
+                          </div>
+                          <div style={{ color: '#fbbf24', fontFamily: 'JetBrains Mono', fontSize: '9.5px' }}>
+                            {(st.properties.confidence * 100).toFixed(1)}%
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </div>
 
               {/* DATA SOURCES */}
-              <div>
+              <div className="panel-section">
                 <div className="section-heading">
-                  <FileText size={15} style={{ color: '#34d399' }} />
+                  <FileText size={14} style={{ color: '#34d399' }} />
                   <span>Verified Data Feeds</span>
                 </div>
 
                 <div className="source-item">
-                  <div className="source-name">NEON Airborne Observation Platform</div>
-                  <div>Ordway-Swisher Biological Station (OSBS) • 10 cm/pixel RGB & LiDAR CHM/DTM survey data.</div>
+                  <div className="source-name">NEON AOP Survey</div>
+                  <div>10 cm/pixel RGB & LiDAR CHM/DTM data.</div>
                 </div>
 
                 <div className="source-item">
-                  <div className="source-name">DeepForest 2.1 & Tobler Terrain TSP</div>
-                  <div>Deep learning tree crown detection + exact Held-Karp slope-and-canopy least-cost pathing.</div>
+                  <div className="source-name">DeepForest & Tobler TSP</div>
+                  <div>Tree detection + Held-Karp least-cost pathing.</div>
                 </div>
 
                 <div className="source-item">
-                  <div className="source-name">NASA FIRMS Active Fire NRT</div>
-                  <div>VIIRS 375m active fire detection product (S-NPP satellite).</div>
+                  <div className="source-name">NASA FIRMS NRT</div>
+                  <div>VIIRS 375m active fire detection product.</div>
                 </div>
               </div>
             </div>
 
             {/* HONESTY FOOTER */}
-            <div className="honesty-footer">
+            <div className="honesty-footer compact">
               <div className="honesty-title">VanDrishti System Integrity</div>
-              <div>All {stats.totalTrees} LiDAR-validated canopies, {stats.totalHealthCells} health cells, and {stats.terrainDist}m terrain route are computed directly from authentic NEON & NASA geospatial layers.</div>
+              <div>Computed directly from authentic NEON & NASA geospatial layers.</div>
             </div>
           </div>
         </div>

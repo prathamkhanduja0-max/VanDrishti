@@ -172,7 +172,6 @@ def process_uploaded_file(file: UploadFile, file_type: str = "rgb_t2") -> Dict[s
     record["assessment"] = assessment
     return record
 
-
 def get_upload_cost_surface(upload_id: str) -> Dict[str, Any]:
     """Retrieves or generates on-the-fly the cost surface for a specific upload."""
     from backend.database import get_db_connection
@@ -202,3 +201,4 @@ def get_upload_cost_surface(upload_id: str) -> Dict[str, Any]:
             return {"routable": False, "reason": f"Failed generating cost surface: {err}"}
 
     return {"routable": False, "reason": "Upload is not a valid raster dataset for cost surface generation"}
+

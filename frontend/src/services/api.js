@@ -97,7 +97,6 @@ export const apiService = {
     if (!res.ok) throw new Error(`Upload failed: ${res.statusText}`);
     return res.json();
   },
-
   getUploadCostSurface: async (uploadId) => {
     try {
       const res = await fetch(`${API_BASE}/upload/${uploadId}/cost-surface`);
@@ -110,3 +109,4 @@ export const apiService = {
     return null;
   },
 };
+
