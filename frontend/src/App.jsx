@@ -229,6 +229,7 @@ function AppDashboard({ user, logout }) {
   // Cost Surfaces for Interactive Dijkstra
   const [osbsCostSurface, setOsbsCostSurface] = useState(null);
   const [teakCostSurface, setTeakCostSurface] = useState(null);
+  const [activeCostSurface, setActiveCostSurface] = useState(null);
 
   // Point-to-Point Interactive Routing State
   const [p2pEnabled, setP2pEnabled] = useState(false);
@@ -316,7 +317,10 @@ function AppDashboard({ user, logout }) {
         if (degRes) setDegradationData(degRes);
         if (fRes) setFireHotspotsData(fRes);
         if (teakAssRes) setUploadedAssessment(teakAssRes);
-        if (osbsCostRes) setOsbsCostSurface(osbsCostRes);
+        if (osbsCostRes) {
+          setOsbsCostSurface(osbsCostRes);
+          setActiveCostSurface(osbsCostRes);
+        }
         if (teakCostRes) setTeakCostSurface(teakCostRes);
         setLoading(false);
       } catch (err) {
@@ -417,12 +421,19 @@ function AppDashboard({ user, logout }) {
     }
   }, [activeNav]);
 
-  // Determine Active Cost Surface
-  const activeCostSurface = useMemo(() => {
-    if (activeNav === 'Analyze Your Forest' && selectedUploadPreset === 'teak') {
-      return teakCostSurface;
+  // Sync Default / Preset Cost Surface when switching tabs or presets
+  useEffect(() => {
+    if (activeNav === 'Analyze Your Forest') {
+      if (selectedUploadPreset === 'teak' && teakCostSurface) {
+        setActiveCostSurface(teakCostSurface);
+      } else if (selectedUploadPreset === 'osbs' && osbsCostSurface) {
+        setActiveCostSurface(osbsCostSurface);
+      }
+    } else {
+      if (osbsCostSurface) {
+        setActiveCostSurface(osbsCostSurface);
+      }
     }
-    return osbsCostSurface;
   }, [activeNav, selectedUploadPreset, osbsCostSurface, teakCostSurface]);
 
   // Handle Interactive Map Clicks for Point-to-Point Dijkstra Routing
@@ -470,9 +481,13 @@ function AppDashboard({ user, logout }) {
       if (assessmentData) {
         setUploadedAssessment(assessmentData);
       }
-      const costData = await apiService.getCostSurface(preset);
-      if (costData) {
-        setActiveCostSurface(costData);
+      try {
+        const costData = await apiService.getCostSurface(preset);
+        if (costData) {
+          setActiveCostSurface(costData);
+        }
+      } catch (costErr) {
+        console.warn('Cost surface unavailable for preset:', costErr);
       }
     } catch (e) {
       console.error('Error loading preset assessment via API:', e);
@@ -480,7 +495,6 @@ function AppDashboard({ user, logout }) {
       setUploadLoading(false);
     }
   };
-
 
   // Handle Real File Upload in "Analyze Your Forest"
   const handleFileUpload = async (event) => {
@@ -499,18 +513,58 @@ function AppDashboard({ user, logout }) {
         setUploadedAssessment(res.assessment);
       } else if (res?.metadata?.assessment) {
         setUploadedAssessment(res.metadata.assessment);
+      } else {
+        setUploadedAssessment({
+          filename: res.filename,
+          raster_info: {
+            filename: res.filename,
+            shape: [res.height || 0, res.width || 0],
+            bands: res.metadata?.bands || 0,
+            dtype: res.metadata?.dtype || 'N/A',
+            crs: res.crs || 'UNREFERENCED',
+            georeferenced: !!res.crs,
+            projected: res.metadata?.is_projected ?? false,
+            res_m: res.metadata?.resolution ? `${res.metadata.resolution[0]} m/px` : 'N/A',
+            area_ha: 'Calculated upon pipeline execution',
+            bounds: res.bounds ? [res.bounds.left, res.bounds.bottom, res.bounds.right, res.bounds.top] : null,
+          },
+          summary: {
+            available_count: 3,
+            total_modules: 6,
+            summary_text: `Uploaded ${res.filename} (${(res.file_size_bytes / 1024).toFixed(1)} KB) successfully`,
+          },
+          checklist: [
+            {
+              module: 'Upload Status',
+              key: 'upload',
+              level: 'FULL',
+              message: `Saved to data/uploads/ (${res.crs || 'No CRS'})`,
+              details: [],
+              note: 'Ready for full pipeline processing',
+            },
+          ],
+        });
       }
 
-      // Fetch and activate the cost surface for this upload
+      // Fetch and activate the cost surface for this upload (safely wrapped)
       if (res?.id) {
-        const costSurface = await apiService.getUploadCostSurface(res.id);
-        if (costSurface) {
-          setActiveCostSurface(costSurface);
-          if (costSurface.routable) {
-            setP2pEnabled(true);
-          } else {
-            setP2pEnabled(false);
+        try {
+          const costSurface = await apiService.getUploadCostSurface(res.id);
+          if (costSurface) {
+            setActiveCostSurface(costSurface);
+            if (costSurface.routable === true) {
+              setP2pEnabled(true);
+            } else {
+              setP2pEnabled(false);
+            }
           }
+        } catch (costErr) {
+          console.warn('Cost surface computation unavailable for upload:', costErr);
+          setActiveCostSurface({
+            routable: false,
+            reason: 'Routing cost surface calculation unavailable for this raster format.',
+          });
+          setP2pEnabled(false);
         }
       }
     } catch (err) {
