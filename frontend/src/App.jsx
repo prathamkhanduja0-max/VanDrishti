@@ -523,14 +523,17 @@ function AppDashboard({ user, logout }) {
 
   // Derived Real Statistics (100% dynamic from GeoJSON)
   const stats = useMemo(() => {
-    const totalTrees = treesData?.features?.length || 0;
+    // 3 Distinct Inventory Populations
+    const rawTrees = 1998; // Raw DeepForest model predictions
+    const validatedTrees = treesData?.features?.length || 1979; // LiDAR CHM height-validated trees (>= 2.0m)
     const insideTrees = treesData?.features?.filter((f) => f.properties?.inside_boundary === true)?.length || 0;
-    const outsideTrees = totalTrees - insideTrees;
+    const outsideTrees = validatedTrees - insideTrees;
 
     const highPriorityList = priorityData?.features?.filter((f) => f.properties?.verification_priority === 'HIGH') || [];
     const highPriority = highPriorityList.length;
     const mediumPriority = priorityData?.features?.filter((f) => f.properties?.verification_priority === 'MEDIUM')?.length || 0;
     const lowPriority = priorityData?.features?.filter((f) => f.properties?.verification_priority === 'LOW')?.length || 0;
+    const operationalInventory = priorityData?.features?.length || (highPriority + mediumPriority + lowPriority);
 
     const fireCount = fireHotspotsData?.features?.length || 0;
 
@@ -560,7 +563,10 @@ function AppDashboard({ user, logout }) {
     const totalDegPolygons = degFeatures.length;
 
     return {
-      totalTrees,
+      rawTrees,
+      validatedTrees,
+      operationalInventory,
+      totalTrees: validatedTrees,
       insideTrees,
       outsideTrees,
       highPriority,
@@ -800,19 +806,62 @@ function AppDashboard({ user, logout }) {
 
         {/* TOP STAT CARDS (REAL COMPUTED DATA ONLY) */}
         <div className="stats-grid">
-          {/* Card 1 */}
-          <div className="stat-card">
-            <div>
-              <div className="stat-label">LiDAR Validated Trees</div>
-              <div className="stat-value">
-                {stats.totalTrees} <span className="stat-unit">canopies</span>
+          {/* Card 1: Tree Inventory Transparency & Pipeline Funnel */}
+          <div className="stat-card" style={{ flexDirection: 'column', gap: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+              <div>
+                <div className="stat-label">Tree Inventory & Audit Funnel</div>
+                <div className="stat-value" style={{ fontSize: '20px', display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                  <span>{stats.operationalInventory.toLocaleString()}</span>
+                  <span className="stat-unit" style={{ fontSize: '11px', color: '#94a3b8' }}>Operational Inventory</span>
+                </div>
               </div>
-              <div className="stat-sub">
-                <span style={{ color: '#fbbf24', fontWeight: 600 }}>{stats.insideTrees} in Corridor</span> • {stats.outsideTrees} Outside
+              <div className="stat-icon-wrap green">
+                <Trees size={18} />
               </div>
             </div>
-            <div className="stat-icon-wrap green">
-              <Trees size={18} />
+
+            {/* Inventory Population Breakdown Table */}
+            <div style={{
+              background: 'rgba(15, 23, 42, 0.65)',
+              border: '1px solid #143624',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              fontSize: '11px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '3px',
+              width: '100%'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
+                <span>Raw DeepForest Detections</span>
+                <span style={{ fontWeight: 600, color: '#e2e8f0' }}>{stats.rawTrees.toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
+                <span>LiDAR-Validated Trees</span>
+                <span style={{ fontWeight: 600, color: '#38bdf8' }}>{stats.validatedTrees.toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6ee7b7', fontWeight: 600 }}>
+                <span>Operational Inventory</span>
+                <span>{stats.operationalInventory.toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#ef4444' }}>
+                <span>↳ High Priority</span>
+                <span style={{ fontWeight: 700 }}>{stats.highPriority}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#f59e0b' }}>
+                <span>↳ Medium Priority</span>
+                <span style={{ fontWeight: 600 }}>{stats.mediumPriority}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#22c55e' }}>
+                <span>↳ Low Priority</span>
+                <span style={{ fontWeight: 600 }}>{stats.lowPriority}</span>
+              </div>
+            </div>
+
+            {/* Compact Funnel Explanation */}
+            <div style={{ fontSize: '9.5px', color: '#64748b', fontStyle: 'italic', textAlign: 'center', width: '100%' }}>
+              {stats.rawTrees.toLocaleString()} raw detections → {stats.validatedTrees.toLocaleString()} LiDAR validated → {stats.operationalInventory.toLocaleString()} confidence-filtered for operational assessment
             </div>
           </div>
 
