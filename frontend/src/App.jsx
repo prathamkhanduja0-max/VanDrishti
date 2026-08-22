@@ -1061,17 +1061,28 @@ function AppDashboard({ user, logout }) {
 
               {/* Right Panel: Live Map for Uploaded Raster Results */}
               <div className="analyzer-map-wrap">
-                {/* Floating Reopen Button for Collapsed Module Capability Report */}
+                {/* Reopen Handles for Collapsed Module Capability Report */}
                 {!moduleReportOpen && (
-                  <button
-                    className="floating-reopen-btn left"
-                    onClick={() => setModuleReportOpen(true)}
-                    title="Open Module Capability Report"
-                  >
-                    <Plus size={14} style={{ color: '#34d399' }} />
-                    <span>Module Report</span>
-                    <ChevronRight size={13} style={{ color: '#94a3b8' }} />
-                  </button>
+                  <>
+                    <div
+                      className="edge-pull-tab left"
+                      onClick={() => setModuleReportOpen(true)}
+                      title="Click to pull out Module Capability Report"
+                    >
+                      <ChevronRight size={16} />
+                      <span className="edge-pull-label">MODULE REPORT</span>
+                    </div>
+
+                    <button
+                      className="floating-reopen-btn left"
+                      onClick={() => setModuleReportOpen(true)}
+                      title="Open Module Capability Report"
+                    >
+                      <FileText size={15} style={{ color: '#34d399' }} />
+                      <span>+ Module Report</span>
+                      <ChevronRight size={13} style={{ color: '#94a3b8' }} />
+                    </button>
+                  </>
                 )}
 
                 {/* P2P HUD OVERLAY ON UPLOAD MAP */}
@@ -1876,17 +1887,28 @@ function AppDashboard({ user, logout }) {
                   <ChevronDown size={13} style={{ color: '#94a3b8' }} />
                 </button>
               )}
-              {/* Floating Reopen Button on Map for Collapsed Right Panel */}
+              {/* Floating Reopen Handles on Map for Collapsed Right Panel */}
               {!rightPanelOpen && activeNav !== 'Analyze Your Forest' && (
-                <button
-                  className="floating-reopen-btn right"
-                  onClick={() => setRightPanelOpen(true)}
-                  title="Expand Audit & Inspector Panel"
-                >
-                  <ChevronLeft size={13} style={{ color: '#94a3b8' }} />
-                  <ShieldAlert size={14} style={{ color: '#34d399' }} />
-                  <span>Audit & Alerts</span>
-                </button>
+                <>
+                  <div
+                    className="edge-pull-tab right"
+                    onClick={() => setRightPanelOpen(true)}
+                    title="Click to pull out Audit & Inspector Drawer"
+                  >
+                    <ChevronLeft size={16} />
+                    <span className="edge-pull-label">AUDIT DRAWER</span>
+                  </div>
+
+                  <button
+                    className="floating-reopen-btn right"
+                    onClick={() => setRightPanelOpen(true)}
+                    title="Expand Audit & Inspector Panel"
+                  >
+                    <ChevronLeft size={13} style={{ color: '#94a3b8' }} />
+                    <ShieldAlert size={14} style={{ color: '#34d399' }} />
+                    <span>Audit & Alerts</span>
+                  </button>
+                </>
               )}
             </div>
           )}
