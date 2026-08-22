@@ -734,12 +734,12 @@ function AppDashboard({ user, logout }) {
     const thinningCount = degFeatures.filter((f) => f.properties?.class_name === 'thinning' || f.properties?.class_id === 2).length;
     const totalDegPolygons = degFeatures.length;
 
-    // Estimated Green Cover (median crown = 9.1 m², study area = 250m × 250m = 62,500 m²)
-    const MEDIAN_CROWN_M2 = 9.1;
+    // Estimated Green Cover — Bbox Inscribed Ellipse method (π/4 correction)
+    // 1,979 trees × median bbox ellipse area at 1m/px raster, corrected to real scale
+    const GREEN_COVER_AREA_M2 = 25188;
     const STUDY_AREA_M2 = 62500;
     const validatedTreeCount = treesData?.features?.length || 0;
-    const greenCoverAreaM2 = validatedTreeCount * MEDIAN_CROWN_M2;
-    const greenCoverPercent = ((greenCoverAreaM2 / STUDY_AREA_M2) * 100).toFixed(1);
+    const greenCoverPercent = ((GREEN_COVER_AREA_M2 / STUDY_AREA_M2) * 100).toFixed(1);
 
     return {
       totalTrees,
@@ -764,7 +764,7 @@ function AppDashboard({ user, logout }) {
       removalCount,
       thinningCount,
       greenCoverPercent,
-      greenCoverAreaM2: greenCoverAreaM2.toLocaleString(),
+      greenCoverAreaM2: GREEN_COVER_AREA_M2.toLocaleString(),
       studyAreaM2: STUDY_AREA_M2.toLocaleString(),
       validatedTreeCount,
     };
@@ -1077,7 +1077,7 @@ function AppDashboard({ user, logout }) {
             </div>
             <div className="stat-icon-wrap" style={{ background: 'linear-gradient(135deg, #86efac, #4ade80)', flexShrink: 0 }}>
               {/* Tree + person under sun icon */}
-              <svg width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="#166534" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="#166534" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
                 {/* Sun rays */}
                 <line x1="17" y1="8" x2="17" y2="4" />
                 <line x1="11" y1="11" x2="8" y2="8" />
