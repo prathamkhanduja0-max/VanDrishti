@@ -173,6 +173,7 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
     ExG field, which shifts the percentile threshold and suppresses weak maxima. Counts from
     rasters of different ground resolution are therefore NOT directly comparable, and
     `resolution_normalized` denotes the window basis only, not a validated invariance claim.
+
     `render_cap` limits how many features are serialised to GeoJSON for browser rendering,
     but the full peak count is always reported separately so the number shown to the user
     is never a truncation artifact. Retained peaks are selected by descending ExG strength
@@ -250,6 +251,13 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
 
             if has_crs:
                 gx, gy = xy(transform, py, px)
+                if str(crs) != "EPSG:4326":
+                    try:
+                        from rasterio.warp import transform as warp_transform
+                        lons, lats = warp_transform(crs, "EPSG:4326", [gx], [gy])
+                        gx, gy = lons[0], lats[0]
+                    except Exception:
+                        pass
             else:
                 gx, gy = px, py
 
@@ -273,7 +281,7 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
             "type": "FeatureCollection",
             "crs": {
                 "type": "name",
-                "properties": {"name": str(crs) if has_crs else "UNREFERENCED"}
+                "properties": {"name": "EPSG:4326" if has_crs else "UNREFERENCED"}
             },
             "features": features
         }

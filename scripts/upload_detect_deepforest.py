@@ -199,6 +199,13 @@ def detect_upload_deepforest(
     for n, i in enumerate(sorted(final_idx), 1):
         if has_crs:
             gx, gy = xy(transform, cy_px[i], cx_px[i])
+            if str(crs) != "EPSG:4326":
+                try:
+                    from rasterio.warp import transform as warp_transform
+                    lons, lats = warp_transform(crs, "EPSG:4326", [gx], [gy])
+                    gx, gy = lons[0], lats[0]
+                except Exception:
+                    pass
         else:
             gx, gy = float(cx_px[i]), float(cy_px[i])
         props = {
