@@ -1115,28 +1115,16 @@ function AppDashboard({ user, logout }) {
 
               {/* Right Panel: Live Map for Uploaded Raster Results */}
               <div className="analyzer-map-wrap">
-                {/* Reopen Handles for Collapsed Module Capability Report */}
+                {/* Floating Reopen Vertical Tab for Collapsed Module Capability Report */}
                 {!moduleReportOpen && (
-                  <>
-                    <div
-                      className="edge-pull-tab left"
-                      onClick={() => setModuleReportOpen(true)}
-                      title="Click to pull out Module Capability Report"
-                    >
-                      <ChevronRight size={16} />
-                      <span className="edge-pull-label">MODULE REPORT</span>
-                    </div>
-
-                    <button
-                      className="floating-reopen-btn left"
-                      onClick={() => setModuleReportOpen(true)}
-                      title="Open Module Capability Report"
-                    >
-                      <FileText size={15} style={{ color: '#34d399' }} />
-                      <span>+ Module Report</span>
-                      <ChevronRight size={13} style={{ color: '#94a3b8' }} />
-                    </button>
-                  </>
+                  <button
+                    className="drawer-reopen-tab left"
+                    onClick={() => setModuleReportOpen(true)}
+                    title="Open Module Capability Report"
+                    aria-label="Open Module Capability Report"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
                 )}
 
                 {/* P2P HUD OVERLAY ON UPLOAD MAP */}
