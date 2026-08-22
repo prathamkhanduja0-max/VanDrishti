@@ -84,7 +84,7 @@ const createStopIcon = (number, bg = '#ef4444') => {
   });
 };
 
-const createP2PIcon = (label, bg = '#10b981') => {
+const createP2PIcon = (label, bg = '#468585') => {
   return L.divIcon({
     className: 'custom-p2p-icon',
     html: `
@@ -100,7 +100,7 @@ const createP2PIcon = (label, bg = '#10b981') => {
         font-weight: 800;
         font-size: 12.5px;
         border: 2.5px solid white;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.9);
+        box-shadow: 0 4px 16px rgba(31,71,71,0.4);
         transform: translate(-14px, -14px);
       ">
         ${label}
@@ -116,24 +116,24 @@ const createEntryIcon = () => {
     className: 'custom-entry-icon',
     html: `
       <div style="
-        background-color: #0284c7;
+        background-color: #468585;
         color: white;
         padding: 4px 9px;
         border-radius: 5px;
         font-weight: 800;
         font-size: 10.5px;
         border: 2px solid white;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.85);
+        box-shadow: 0 4px 12px rgba(31,71,71,0.35);
         display: flex;
         align-items: center;
         white-space: nowrap;
         transform: translate(-50%, -50%);
       ">
-        ★ RANGER START
+        ENTRANCE / BASE (OSBS HQ)
       </div>
     `,
-    iconSize: [100, 24],
-    iconAnchor: [50, 12],
+    iconSize: [160, 24],
+    iconAnchor: [80, 12],
   });
 };
 
@@ -207,9 +207,9 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div style={{ minHeight: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#060e0a', gap: '16px' }}>
-        <div style={{ width: '40px', height: '40px', border: '3px solid #143624', borderTopColor: '#34d399', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-        <div style={{ color: '#64748b', fontSize: '13px', fontWeight: 500 }}>Loading VanDrishti…</div>
+      <div style={{ minHeight: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--vd-bg-page)', gap: '16px' }}>
+        <div style={{ width: '40px', height: '40px', border: '3px solid var(--vd-border-subtle)', borderTopColor: 'var(--vd-deep)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ color: 'var(--vd-deep)', fontSize: '13px', fontWeight: 600 }}>Loading VanDrishti…</div>
       </div>
     );
   }
@@ -764,31 +764,31 @@ function AppDashboard({ user, logout }) {
           {/* User Profile */}
           <div style={{
             padding: '10px 16px',
-            borderBottom: '1px solid #143624',
+            borderBottom: '1px solid #3b7474',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            background: 'rgba(16, 185, 129, 0.04)',
+            background: 'rgba(213, 240, 193, 0.08)',
           }}>
             <img
-              src={user.photoURL || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.displayName || 'U') + '&background=10b981&color=fff&size=32'}
+              src={user.photoURL || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.displayName || 'U') + '&background=AAD9BB&color=468585&size=32'}
               alt="avatar"
-              style={{ width: '30px', height: '30px', borderRadius: '50%', border: '2px solid #1e5c3a', flexShrink: 0 }}
+              style={{ width: '30px', height: '30px', borderRadius: '50%', border: '2px solid #AAD9BB', flexShrink: 0 }}
             />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user.displayName || 'User'}
               </div>
-              <div style={{ fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: '10px', color: '#AAD9BB', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user.email}
               </div>
             </div>
             <button
               onClick={logout}
               title="Sign out"
-              style={{ background: 'none', border: '1px solid #1e3a2a', borderRadius: '6px', padding: '5px', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', flexShrink: 0 }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.color = '#f87171'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#1e3a2a'; e.currentTarget.style.color = '#94a3b8'; }}
+              style={{ background: 'none', border: '1px solid #3b7474', borderRadius: '6px', padding: '5px', cursor: 'pointer', color: '#D5F0C1', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s', flexShrink: 0 }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#F9F7C9'; e.currentTarget.style.color = '#ffffff'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#3b7474'; e.currentTarget.style.color = '#D5F0C1'; }}
             >
               <LogOut size={14} />
             </button>
@@ -859,7 +859,7 @@ function AppDashboard({ user, logout }) {
             <span>
               <span className="status-dot"></span> System Operational
             </span>
-            <span style={{ fontSize: '9px', background: '#052e16', padding: '1px 5px', borderRadius: '3px', border: '1px solid #10b981', color: '#6ee7b7' }}>
+            <span style={{ fontSize: '9px', background: 'var(--vd-aqua)', padding: '1px 6px', borderRadius: '3px', border: '1px solid var(--vd-mint)', color: 'var(--vd-deep)', fontWeight: 700 }}>
               v2.2 Dijkstra
             </span>
           </div>
@@ -921,7 +921,7 @@ function AppDashboard({ user, logout }) {
                 className="report-download-btn pdf"
                 title="Download Full OSBS Area Intelligence Report (PDF)"
               >
-                <FileText size={12} style={{ color: '#34d399' }} />
+                <FileText size={12} style={{ color: 'var(--vd-deep)' }} />
                 <span>Report PDF</span>
               </button>
               <button
@@ -929,13 +929,13 @@ function AppDashboard({ user, logout }) {
                 className="report-download-btn csv"
                 title="Download OSBS Area Intelligence Data (CSV)"
               >
-                <Download size={12} style={{ color: '#60a5fa' }} />
+                <Download size={12} style={{ color: 'var(--vd-deep)' }} />
                 <span>CSV</span>
               </button>
             </div>
 
             <div className="live-badge">
-              <Radio size={13} style={{ color: '#34d399' }} />
+              <Radio size={13} style={{ color: 'var(--vd-deep)' }} />
               <span>Verified Real Data</span>
             </div>
           </div>
@@ -951,7 +951,7 @@ function AppDashboard({ user, logout }) {
                 {stats.totalTrees} <span className="stat-unit">canopies</span>
               </div>
               <div className="stat-sub">
-                <span style={{ color: '#fbbf24', fontWeight: 600 }}>{stats.insideTrees} in Corridor</span> • {stats.outsideTrees} Outside
+                <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>{stats.insideTrees} in Corridor</span> • {stats.outsideTrees} Outside
               </div>
             </div>
             <div className="stat-icon-wrap green">
@@ -963,11 +963,11 @@ function AppDashboard({ user, logout }) {
           <div className="stat-card">
             <div>
               <div className="stat-label">Forest Health Score</div>
-              <div className="stat-value" style={{ color: '#4ade80' }}>
+              <div className="stat-value">
                 {stats.totalHealthCells} <span className="stat-unit">cells (25m)</span>
               </div>
               <div className="stat-sub">
-                Grades: <span style={{ color: '#22c55e', fontWeight: 700 }}>A:{stats.gradeA}</span> • <span style={{ color: '#84cc16', fontWeight: 700 }}>B:{stats.gradeB}</span> • <span style={{ color: '#f97316', fontWeight: 700 }}>C:{stats.gradeC}</span> • <span style={{ color: '#ef4444', fontWeight: 700 }}>D:{stats.gradeD}</span>
+                Grades: <span style={{ color: '#16a34a', fontWeight: 700 }}>A:{stats.gradeA}</span> • <span style={{ color: '#65a30d', fontWeight: 700 }}>B:{stats.gradeB}</span> • <span style={{ color: '#ea580c', fontWeight: 700 }}>C:{stats.gradeC}</span> • <span style={{ color: '#dc2626', fontWeight: 700 }}>D:{stats.gradeD}</span>
               </div>
             </div>
             <div className="stat-icon-wrap green">
@@ -979,11 +979,11 @@ function AppDashboard({ user, logout }) {
           <div className="stat-card">
             <div>
               <div className="stat-label">Terrain TSP Route</div>
-              <div className="stat-value" style={{ color: '#22d3ee' }}>
+              <div className="stat-value">
                 {stats.terrainDist} <span className="stat-unit">m ({stats.terrainTime} min)</span>
               </div>
               <div className="stat-sub">
-                <span style={{ color: '#6ee7b7', fontWeight: 600 }}>-{stats.terrainSaved} min</span> vs NN • {stats.highPriority} Stops
+                <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>-{stats.terrainSaved} min</span> vs NN • {stats.highPriority} Stops
               </div>
             </div>
             <div className="stat-icon-wrap cyan">
@@ -992,17 +992,17 @@ function AppDashboard({ user, logout }) {
           </div>
 
           {/* Card 4 */}
-          <div className="stat-card">
+          <div className="stat-card" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #fefef2 100%)', borderColor: '#e9e4a8' }}>
             <div>
               <div className="stat-label">Canopy Degradation</div>
-              <div className="stat-value" style={{ color: '#f87171' }}>
+              <div className="stat-value" style={{ color: '#856a14' }}>
                 {stats.totalDegPolygons} <span className="stat-unit">zones</span>
               </div>
               <div className="stat-sub">
-                <span style={{ color: '#ef4444', fontWeight: 600 }}>{stats.removalCount} Removal</span> • {stats.thinningCount} Thinning
+                <span style={{ color: '#dc2626', fontWeight: 600 }}>{stats.removalCount} Removal</span> • {stats.thinningCount} Thinning
               </div>
             </div>
-            <div className="stat-icon-wrap red">
+            <div className="stat-icon-wrap amber">
               <Scissors size={18} />
             </div>
           </div>
@@ -1017,7 +1017,7 @@ function AppDashboard({ user, logout }) {
               <div className="analyzer-sidebar">
                 <div className="analyzer-sidebar-header">
                   <div className="analyzer-header-title">
-                    <UploadCloud size={18} style={{ color: '#34d399' }} />
+                    <UploadCloud size={18} style={{ color: 'var(--vd-deep)' }} />
                     <span>Module Capability Report</span>
                   </div>
                 </div>
@@ -1027,11 +1027,11 @@ function AppDashboard({ user, logout }) {
 
                 {/* Upload Control */}
                 <label className="upload-dropzone">
-                  <UploadCloud size={28} style={{ color: '#34d399' }} />
-                  <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: '12px' }}>
+                  <UploadCloud size={28} style={{ color: 'var(--vd-deep)' }} />
+                  <div style={{ fontWeight: 700, color: 'var(--vd-text-heading)', fontSize: '12px' }}>
                     Upload Custom GeoTIFF (.tif) or Vector (.geojson)
                   </div>
-                  <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>
+                  <div style={{ fontSize: '10.5px', color: 'var(--vd-text-secondary)' }}>
                     Drag & drop or click to run AI/ExG detection & interactive routing
                   </div>
                   <input
@@ -1044,7 +1044,7 @@ function AppDashboard({ user, logout }) {
 
                 {/* Preset Selectors */}
                 <div>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--vd-text-secondary)', marginBottom: '6px' }}>
                     Select Sample Test Dataset:
                   </div>
                   <div className="preset-selector-group">
@@ -1054,7 +1054,7 @@ function AppDashboard({ user, logout }) {
                     >
                       <div>
                         <div style={{ fontWeight: 600 }}>TEAK_043_2018.tif (Single-Epoch RGB)</div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8' }}>Teakettle, CA • EPSG:32611 • 400×400 px</div>
+                        <div style={{ fontSize: '10px', color: 'var(--vd-text-muted)' }}>Teakettle, CA • EPSG:32611 • 400×400 px</div>
                       </div>
                       <ArrowUpRight size={14} />
                     </button>
@@ -1064,7 +1064,7 @@ function AppDashboard({ user, logout }) {
                     >
                       <div>
                         <div style={{ fontWeight: 600 }}>OSBS_large_2019.tif (Multi-Sensor Suite)</div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8' }}>Ordway-Swisher, FL • EPSG:32617 • RGB + CHM + DTM</div>
+                        <div style={{ fontSize: '10px', color: 'var(--vd-text-muted)' }}>Ordway-Swisher, FL • EPSG:32617 • RGB + CHM + DTM</div>
                       </div>
                       <ArrowUpRight size={14} />
                     </button>
@@ -1072,7 +1072,7 @@ function AppDashboard({ user, logout }) {
                 </div>
 
                 {uploadLoading && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#6ee7b7', fontSize: '12px', padding: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--vd-deep)', fontSize: '12px', padding: '10px' }}>
                     <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
                     <span>Evaluating capabilities with config_loader...</span>
                   </div>
@@ -1081,12 +1081,12 @@ function AppDashboard({ user, logout }) {
                 {/* Technical Metadata Card */}
                 {uploadedAssessment?.raster_info && (
                   <div className="meta-grid-card">
-                    <div style={{ fontWeight: 700, color: '#34d399', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--vd-deep)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <HardDrive size={14} />
                       <span>Raster Technical Profile</span>
                     </div>
                     <div className="meta-grid-row"><span className="meta-key">Filename:</span><span className="meta-val">{uploadedAssessment.raster_info.filename}</span></div>
-                    <div className="meta-grid-row"><span className="meta-key">Georeferenced:</span><span className="meta-val" style={{ color: uploadedAssessment.raster_info.georeferenced ? '#6ee7b7' : '#ef4444' }}>{uploadedAssessment.raster_info.georeferenced ? `Yes (${uploadedAssessment.raster_info.crs})` : 'UNREFERENCED'}</span></div>
+                    <div className="meta-grid-row"><span className="meta-key">Georeferenced:</span><span className="meta-val" style={{ color: uploadedAssessment.raster_info.georeferenced ? 'var(--vd-deep)' : '#dc2626' }}>{uploadedAssessment.raster_info.georeferenced ? `Yes (${uploadedAssessment.raster_info.crs})` : 'UNREFERENCED'}</span></div>
                     <div className="meta-grid-row"><span className="meta-key">CRS Projection:</span><span className="meta-val">{uploadedAssessment.raster_info.projected ? 'Projected (Metric)' : 'Geographic / None'}</span></div>
                     <div className="meta-grid-row"><span className="meta-key">Dimensions:</span><span className="meta-val">{uploadedAssessment.raster_info.shape?.[1]} × {uploadedAssessment.raster_info.shape?.[0]} px ({uploadedAssessment.raster_info.bands} bands)</span></div>
                     <div className="meta-grid-row"><span className="meta-key">Resolution:</span><span className="meta-val">{typeof uploadedAssessment.raster_info.res_m === 'number' ? `${uploadedAssessment.raster_info.res_m} m/pixel` : uploadedAssessment.raster_info.res_m}</span></div>
@@ -1096,8 +1096,8 @@ function AppDashboard({ user, logout }) {
 
                 {/* Detection Preview / DeepForest Result Card */}
                 {uploadedAssessment?.detection_results && (
-                  <div className="meta-grid-card" style={{ borderColor: uploadedAssessment.detection_results.method === 'deepforest' ? '#10b981' : '#059669', background: 'rgba(6, 78, 59, 0.25)' }}>
-                    <div style={{ fontWeight: 700, color: '#34d399', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div className="meta-grid-card" style={{ borderColor: 'var(--vd-aqua)', background: '#f6faf3' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--vd-deep)', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Trees size={14} />
                         <span>
@@ -1112,16 +1112,16 @@ function AppDashboard({ user, logout }) {
                     </div>
 
                     <div style={{ marginTop: '8px' }}>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#6ee7b7', letterSpacing: '-0.5px' }}>
+                      <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--vd-deep)', letterSpacing: '-0.5px' }}>
                         {(uploadedAssessment.detection_results.count || 0).toLocaleString()}
-                        <span style={{ fontSize: '12px', fontWeight: 500, color: '#94a3b8', marginLeft: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--vd-text-secondary)', marginLeft: '6px' }}>
                           {uploadedAssessment.detection_results.method === 'deepforest' ? 'crowns detected' : 'greenness peaks'}
                         </span>
                       </div>
 
                       {/* Truncation Subline */}
                       {uploadedAssessment.detection_results.truncated && (
-                        <div style={{ fontSize: '10.5px', color: '#fbbf24', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ fontSize: '10.5px', color: '#b45309', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <span>•</span>
                           <span>
                             showing {(uploadedAssessment.detection_results.count_rendered || 0).toLocaleString()} strongest of {(uploadedAssessment.detection_results.count || 0).toLocaleString()}
@@ -1131,14 +1131,14 @@ function AppDashboard({ user, logout }) {
 
                       {/* Fallback Reason */}
                       {uploadedAssessment.detection_results.fallback_reason && (
-                        <div style={{ fontSize: '10px', color: '#f59e0b', marginTop: '4px', background: 'rgba(245, 158, 11, 0.1)', padding: '4px 6px', borderRadius: '4px' }}>
+                        <div style={{ fontSize: '10px', color: '#92400e', marginTop: '4px', background: '#fef3c7', padding: '4px 6px', borderRadius: '4px', border: '1px solid #fde68a' }}>
                           <b>ExG Fallback:</b> {uploadedAssessment.detection_results.fallback_reason}
                         </div>
                       )}
 
                       {/* DeepForest Post-Filters */}
                       {uploadedAssessment.detection_results.method === 'deepforest' && uploadedAssessment.detection_results.filters && (
-                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '5px' }}>
+                        <div style={{ fontSize: '10px', color: 'var(--vd-text-secondary)', marginTop: '5px' }}>
                           Raw detections: {uploadedAssessment.detection_results.raw_count?.toLocaleString()} • 
                           Size filter dropped: {uploadedAssessment.detection_results.filters.size_dropped || 0} • 
                           Dedup dropped: {uploadedAssessment.detection_results.filters.dedup_dropped || 0}
@@ -1147,7 +1147,7 @@ function AppDashboard({ user, logout }) {
 
                       {/* Detection Notes */}
                       {uploadedAssessment.detection_results.notes?.length > 0 && (
-                        <div style={{ fontSize: '9.5px', color: '#cbd5e1', marginTop: '4px', fontStyle: 'italic' }}>
+                        <div style={{ fontSize: '9.5px', color: 'var(--vd-text-secondary)', marginTop: '4px', fontStyle: 'italic' }}>
                           {uploadedAssessment.detection_results.notes[0]}
                         </div>
                       )}
@@ -1159,8 +1159,8 @@ function AppDashboard({ user, logout }) {
                 {uploadedAssessment?.checklist && (
                   <div className="checklist-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#f1f5f9' }}>Module Capability Report</span>
-                      <span style={{ fontSize: '10px', color: '#94a3b8' }}>config_loader.assess()</span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--vd-text-heading)' }}>Module Capability Report</span>
+                      <span style={{ fontSize: '10px', color: 'var(--vd-text-muted)' }}>config_loader.assess()</span>
                     </div>
 
                     {uploadedAssessment.checklist.map((item, idx) => (
@@ -1173,7 +1173,7 @@ function AppDashboard({ user, logout }) {
                         </div>
                         <div className="checklist-msg">{item.message}</div>
                         {item.details?.length > 0 && (
-                          <div style={{ fontSize: '9.5px', color: '#f59e0b', marginTop: '2px' }}>
+                          <div style={{ fontSize: '9.5px', color: '#b45309', marginTop: '2px' }}>
                             {item.details.join(' • ')}
                           </div>
                         )}
@@ -1198,7 +1198,7 @@ function AppDashboard({ user, logout }) {
                 {uploadedAssessment && (
                   <div className="report-action-card">
                     <div className="report-action-header">
-                      <FileText size={14} style={{ color: '#34d399' }} />
+                      <FileText size={14} style={{ color: 'var(--vd-deep)' }} />
                       <span>Area Assessment Report</span>
                     </div>
                     <div className="report-action-sub">
@@ -1255,8 +1255,8 @@ function AppDashboard({ user, logout }) {
 
                     {/* Active Cost Surface Banner */}
                     {activeCostSurface && (
-                      <div style={{ fontSize: '10.5px', color: '#6ee7b7', background: 'rgba(6, 78, 59, 0.45)', border: '1px solid #059669', borderRadius: '5px', padding: '4px 8px', margin: '4px 0', lineHeight: '1.35' }}>
-                        Routing on: <b style={{ color: '#ffffff' }}>{activeCostSurface.name || (selectedUploadPreset === 'teak' ? 'TEAK_043_2018' : 'OSBS_large_2019')}</b> {activeCostSurface.shape ? `(${activeCostSurface.shape[1]}×${activeCostSurface.shape[0]} @ ${activeCostSurface.res_m} m)` : ''}
+                      <div style={{ fontSize: '10.5px', color: 'var(--vd-deep)', background: 'var(--vd-pale)', border: '1px solid var(--vd-mint)', borderRadius: '5px', padding: '5px 8px', margin: '4px 0', lineHeight: '1.35' }}>
+                        Routing on: <b style={{ color: 'var(--vd-text-heading)' }}>{activeCostSurface.name || (selectedUploadPreset === 'teak' ? 'TEAK_043_2018' : 'OSBS_large_2019')}</b> {activeCostSurface.shape ? `(${activeCostSurface.shape[1]}×${activeCostSurface.shape[0]} @ ${activeCostSurface.res_m} m)` : ''}
                       </div>
                     )}
 
@@ -1265,7 +1265,7 @@ function AppDashboard({ user, logout }) {
                         {p2pRouteResult?.mode_label || activeCostSurface?.mode_label || 'Cost Surface Active'}
                       </span>
                       {p2pRouteResult && (
-                        <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 600 }}>● Path Solved</span>
+                        <span style={{ fontSize: '10px', color: 'var(--vd-deep)', fontWeight: 700 }}>● Path Solved</span>
                       )}
                     </div>
 
@@ -1397,10 +1397,10 @@ function AppDashboard({ user, logout }) {
                         const isDf = uploadedAssessment?.detection_results?.method === 'deepforest' || feature.properties?.score !== undefined;
                         return L.circleMarker(latlng, {
                           radius: isDf ? 5.0 : 4.5,
-                          fillColor: isDf ? '#10b981' : '#34d399',
+                          fillColor: isDf ? '#468585' : '#80BCBD',
                           color: '#ffffff',
-                          weight: 1.0,
-                          fillOpacity: 0.85,
+                          weight: 1.2,
+                          fillOpacity: 0.9,
                         });
                       }}
                       onEachFeature={(feature, layer) => {
@@ -1410,12 +1410,12 @@ function AppDashboard({ user, logout }) {
                         const val = p.score !== undefined ? p.score : (p.exg_strength !== undefined ? p.exg_strength : p.confidence);
                         const label = isDeepForest ? 'AI Score (RetinaNet)' : (p.exg_strength !== undefined ? 'ExG Strength' : 'Confidence');
                         layer.bindPopup(`
-                          <div style="font-size:12px;">
-                            <b style="color:#34d399;">Detected Tree Crown #${p.tree_id}</b><br/>
+                          <div style="font-size:12px; color: #1f4747;">
+                            <b style="color:#468585;">Detected Tree Crown #${p.tree_id}</b><br/>
                             <b>${label}:</b> ${val !== undefined ? (val * 100).toFixed(1) + '%' : 'N/A'}<br/>
                             ${p.crown_diam_m !== undefined ? `<b>Crown Diameter:</b> ${p.crown_diam_m} m<br/>` : ''}
                             <b>Pixel Coordinates:</b> [${p.pixel_x}, ${p.pixel_y}]<br/>
-                            <span style="font-size:10px; color:#94a3b8;">${isDeepForest ? 'DeepForest (NEON-pretrained RetinaNet)' : 'Single-Raster Optical Crown Preview'}</span>
+                            <span style="font-size:10px; color:#6b9494;">${isDeepForest ? 'DeepForest (NEON-pretrained RetinaNet)' : 'Single-Raster Optical Crown Preview'}</span>
                           </div>
                         `);
                       }}
@@ -1424,10 +1424,10 @@ function AppDashboard({ user, logout }) {
 
                   {/* P2P Dijkstra Start Marker (A) */}
                   {p2pStart && (
-                    <Marker position={p2pStart} icon={createP2PIcon('A', '#10b981')} zIndexOffset={1100}>
+                    <Marker position={p2pStart} icon={createP2PIcon('A', '#468585')} zIndexOffset={1100}>
                       <Popup>
                         <div style={{ fontSize: '12px' }}>
-                          <b style={{ color: '#10b981' }}>Point A (Start)</b><br />
+                          <b style={{ color: '#468585' }}>Point A (Start)</b><br />
                           {p2pStart[0].toFixed(5)}° N, {p2pStart[1].toFixed(5)}° W
                         </div>
                       </Popup>
@@ -1436,10 +1436,10 @@ function AppDashboard({ user, logout }) {
 
                   {/* P2P Dijkstra End Marker (B) */}
                   {p2pEnd && (
-                    <Marker position={p2pEnd} icon={createP2PIcon('B', '#ef4444')} zIndexOffset={1100}>
+                    <Marker position={p2pEnd} icon={createP2PIcon('B', '#80BCBD')} zIndexOffset={1100}>
                       <Popup>
                         <div style={{ fontSize: '12px' }}>
-                          <b style={{ color: '#ef4444' }}>Point B (Destination)</b><br />
+                          <b style={{ color: '#80BCBD' }}>Point B (Destination)</b><br />
                           {p2pEnd[0].toFixed(5)}° N, {p2pEnd[1].toFixed(5)}° W
                         </div>
                       </Popup>
@@ -1473,9 +1473,9 @@ function AppDashboard({ user, logout }) {
           ) : activeNav === 'Canopy Mask' ? (
             /* SPECIAL VIEW 2: CANOPY MASK VISUALIZER */
             <div className="image-viewer-container">
-              <div className="image-viewer-box">
+              <div className="image-viewer-box" style={{ background: '#ffffff', borderColor: 'var(--vd-border-subtle)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontWeight: 700, color: '#6ee7b7', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--vd-deep)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Eye size={18} />
                     <span>Terrain-Aware Route + Canopy Height Model (250m Study Area)</span>
                   </div>
@@ -1483,7 +1483,7 @@ function AppDashboard({ user, logout }) {
                     href="/data/OSBS_large_2019_overview_map_optimized.png"
                     target="_blank"
                     rel="noreferrer"
-                    style={{ fontSize: '11px', color: '#38bdf8', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    style={{ fontSize: '11px', color: 'var(--vd-deep)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
                     <Maximize2 size={12} /> Open Full Resolution
                   </a>
@@ -1491,8 +1491,9 @@ function AppDashboard({ user, logout }) {
                 <img
                   src="/data/OSBS_large_2019_overview_map_optimized.png"
                   alt="OSBS Large 2019 Terrain-Aware TSP Route and CHM"
+                  style={{ border: '1px solid var(--vd-border-subtle)' }}
                 />
-                <div style={{ fontSize: '11px', color: '#94a3b8', lineHeight: 1.4 }}>
+                <div style={{ fontSize: '11px', color: 'var(--vd-text-secondary)', lineHeight: 1.4 }}>
                   <b>Panel 1 (Left)</b>: High-Resolution RGB Orthomosaic with Terrain-Aware TSP Route (488.9 m, 14.96 min) across 13 HIGH stops.<br />
                   <b>Panel 2 (Right)</b>: NEON LiDAR Canopy Height Model (CHM p95=16.6m) showing optimal navigation through natural forest gaps.
                 </div>
@@ -1502,17 +1503,17 @@ function AppDashboard({ user, logout }) {
             /* INTERACTIVE LEAFLET MAP */
             <div className="map-container-box">
               {loading && (
-                <div style={{ position: 'absolute', inset: 0, zIndex: 1000, background: 'rgba(6,14,10,0.88)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <RefreshCw size={28} style={{ color: '#34d399', animation: 'spin 1s linear infinite' }} />
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#6ee7b7' }}>Loading Spatial Layers...</span>
+                <div style={{ position: 'absolute', inset: 0, zIndex: 1000, background: 'rgba(232, 245, 226, 0.9)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <RefreshCw size={28} style={{ color: 'var(--vd-deep)', animation: 'spin 1s linear infinite' }} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--vd-deep)' }}>Loading Spatial Layers...</span>
                 </div>
               )}
 
               {error && (
-                <div style={{ position: 'absolute', inset: 0, zIndex: 1000, background: 'rgba(127,29,29,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', textAlign: 'center' }}>
-                  <ShieldAlert size={36} style={{ color: '#f87171', marginBottom: '8px' }} />
-                  <div style={{ fontWeight: 700, color: '#fee2e2' }}>Error Loading Data Layers</div>
-                  <div style={{ fontSize: '12px', color: '#fca5a5', marginTop: '4px' }}>{error}</div>
+                <div style={{ position: 'absolute', inset: 0, zIndex: 1000, background: 'rgba(254, 242, 242, 0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', textAlign: 'center' }}>
+                  <ShieldAlert size={36} style={{ color: '#dc2626', marginBottom: '8px' }} />
+                  <div style={{ fontWeight: 700, color: '#991b1b' }}>Error Loading Data Layers</div>
+                  <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '4px' }}>{error}</div>
                 </div>
               )}
 
@@ -1536,7 +1537,7 @@ function AppDashboard({ user, logout }) {
                       {p2pRouteResult?.mode_label || activeCostSurface?.mode_label || 'terrain-aware'}
                     </span>
                     {p2pRouteResult && (
-                      <span style={{ fontSize: '10px', color: '#10b981', fontWeight: 600 }}>● Path Solved</span>
+                      <span style={{ fontSize: '10px', color: 'var(--vd-deep)', fontWeight: 700 }}>● Path Solved</span>
                     )}
                   </div>
 
@@ -1545,7 +1546,7 @@ function AppDashboard({ user, logout }) {
                     {!p2pStart && '1. Click anywhere on the map to set Start Point A.'}
                     {p2pStart && !p2pEnd && '2. Click your target destination to run Dijkstra.'}
                     {p2pRouteResult && 'Least-cost Dijkstra path successfully generated across terrain & canopy cost surface.'}
-                    {p2pError && <span style={{ color: '#f87171' }}>{p2pError}</span>}
+                    {p2pError && <span style={{ color: '#dc2626' }}>{p2pError}</span>}
                   </div>
 
                   {/* Metric Outputs */}
@@ -1567,7 +1568,7 @@ function AppDashboard({ user, logout }) {
                         {!p2pRouteResult.is_projected && (
                           <div className="p2p-metric-item" style={{ gridColumn: 'span 2' }}>
                             <span className="p2p-metric-label">Pixel Distance</span>
-                            <span className="p2p-metric-val" style={{ color: '#f59e0b' }}>
+                            <span className="p2p-metric-val" style={{ color: '#d97706' }}>
                               {p2pRouteResult.pixel_distance} px (Unprojected)
                             </span>
                           </div>
@@ -1870,15 +1871,15 @@ function AppDashboard({ user, logout }) {
                     onEachFeature={(feature, layer) => {
                       const props = feature.properties || {};
                       layer.bindPopup(`
-                        <div style="font-size:12px;">
-                          <b style="font-size:13px; color:#34d399;">Tree Canopy #${props.tree_id}</b><br/>
+                        <div style="font-size:12px; color: #1f4747;">
+                          <b style="font-size:13px; color: #468585;">Tree Canopy #${props.tree_id}</b><br/>
                           <b>Priority:</b> <span style="color:${
-                            props.verification_priority === 'HIGH' ? '#f87171' : props.verification_priority === 'MEDIUM' ? '#fbbf24' : '#4ade80'
+                            props.verification_priority === 'HIGH' ? '#dc2626' : props.verification_priority === 'MEDIUM' ? '#d97706' : '#16a34a'
                           }; font-weight:bold;">${props.verification_priority}</span><br/>
                           <b>Confidence:</b> ${(props.confidence * 100).toFixed(1)}%<br/>
                           <b>Corridor Status:</b> ${props.inside_boundary ? 'INSIDE (AFFECTED)' : 'OUTSIDE (SAFE)'}<br/>
                           <b>Rationale:</b> ${props.priority_reason || 'N/A'}<br/>
-                          <span style="font-size:10px; color:#94a3b8;">UTM: ${props.geo_easting || ''} E, ${props.geo_northing || ''} N</span>
+                          <span style="font-size:10px; color:#6b9494;">UTM: ${props.geo_easting || ''} E, ${props.geo_northing || ''} N</span>
                         </div>
                       `);
                       layer.on('click', () => setSelectedFeature({ type: 'tree', properties: props }));
@@ -1900,12 +1901,12 @@ function AppDashboard({ user, logout }) {
                     >
                       <Popup>
                         <div style={{ fontSize: '12px' }}>
-                          <b style={{ color: '#f87171', fontSize: '13px' }}>Stop #{st.stopNum}: Tree #{st.treeId}</b><br />
+                          <b style={{ color: '#dc2626', fontSize: '13px' }}>Stop #{st.stopNum}: Tree #{st.treeId}</b><br />
                           <b>Priority:</b> HIGH (Mandatory Ground Check)<br />
                           <b>Confidence:</b> {(st.properties.confidence * 100).toFixed(1)}%<br />
                           <b>Corridor Status:</b> {st.properties.inside_boundary ? 'INSIDE CORRIDOR' : 'OUTSIDE'}<br />
                           <b>Rationale:</b> {st.properties.priority_reason || 'N/A'}<br />
-                          <span style={{ fontSize: '10px', color: '#94a3b8' }}>WGS84: {st.lat.toFixed(5)}° N, {st.lon.toFixed(5)}° W</span>
+                          <span style={{ fontSize: '10px', color: '#6b9494' }}>WGS84: {st.lat.toFixed(5)}° N, {st.lon.toFixed(5)}° W</span>
                         </div>
                       </Popup>
                     </Marker>
@@ -1923,7 +1924,7 @@ function AppDashboard({ user, logout }) {
                       return L.circleMarker(latlng, {
                         radius: radius,
                         fillColor: '#f97316',
-                        color: '#ef4444',
+                        color: '#dc2626',
                         weight: 2,
                         fillOpacity: 0.85,
                       });
@@ -1931,8 +1932,8 @@ function AppDashboard({ user, logout }) {
                     onEachFeature={(feature, layer) => {
                       const props = feature.properties || {};
                       layer.bindPopup(`
-                        <div style="font-size:12px;">
-                          <b style="color:#f97316;">NASA FIRMS Hotspot #${props.hotspot_id}</b><br/>
+                        <div style="font-size:12px; color: #1f4747;">
+                          <b style="color:#ea580c;">NASA FIRMS Hotspot #${props.hotspot_id}</b><br/>
                           <b>FRP:</b> ${props.frp_mw} MW<br/>
                           <b>Confidence:</b> ${props.confidence === 'h' ? 'High' : props.confidence === 'n' ? 'Nominal' : 'Low'}<br/>
                           <b>Acquisition Date:</b> ${props.acq_date} (${props.acq_time_utc} UTC)<br/>
@@ -1946,10 +1947,10 @@ function AppDashboard({ user, logout }) {
 
                 {/* 10. INTERACTIVE POINT-TO-POINT DIJKSTRA START & END MARKERS + PATH */}
                 {p2pStart && (
-                  <Marker position={p2pStart} icon={createP2PIcon('A', '#10b981')} zIndexOffset={1100}>
+                  <Marker position={p2pStart} icon={createP2PIcon('A', '#468585')} zIndexOffset={1100}>
                     <Popup>
                       <div style={{ fontSize: '12px' }}>
-                        <b style={{ color: '#10b981' }}>Point A (Start)</b><br />
+                        <b style={{ color: '#468585' }}>Point A (Start)</b><br />
                         {p2pStart[0].toFixed(5)}° N, {p2pStart[1].toFixed(5)}° W
                       </div>
                     </Popup>
@@ -1957,10 +1958,10 @@ function AppDashboard({ user, logout }) {
                 )}
 
                 {p2pEnd && (
-                  <Marker position={p2pEnd} icon={createP2PIcon('B', '#ef4444')} zIndexOffset={1100}>
+                  <Marker position={p2pEnd} icon={createP2PIcon('B', '#80BCBD')} zIndexOffset={1100}>
                     <Popup>
                       <div style={{ fontSize: '12px' }}>
-                        <b style={{ color: '#ef4444' }}>Point B (Destination)</b><br />
+                        <b style={{ color: '#80BCBD' }}>Point B (Destination)</b><br />
                         {p2pEnd[0].toFixed(5)}° N, {p2pEnd[1].toFixed(5)}° W
                       </div>
                     </Popup>
@@ -1971,7 +1972,7 @@ function AppDashboard({ user, logout }) {
                   <Polyline
                     positions={p2pRouteResult.pathCoordinates}
                     pathOptions={{
-                      color: '#f59e0b',
+                      color: '#d97706',
                       weight: 5.5,
                       opacity: 0.95,
                       dashArray: '3, 6',
@@ -1979,7 +1980,7 @@ function AppDashboard({ user, logout }) {
                   >
                     <Popup>
                       <div style={{ fontSize: '12px' }}>
-                        <b style={{ color: '#f59e0b', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
+                        <b style={{ color: '#d97706', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
                         <b>Model:</b> {p2pRouteResult.mode_label}<br />
                         <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
                         <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
@@ -1994,7 +1995,7 @@ function AppDashboard({ user, logout }) {
                 <div className="layer-panel">
                   <div className="layer-panel-header">
                     <div className="layer-panel-title">
-                      <Layers size={14} style={{ color: '#34d399' }} />
+                      <Layers size={14} style={{ color: 'var(--vd-deep)' }} />
                       <span>Map Layers ({Object.values(layers).filter(Boolean).length}/9)</span>
                     </div>
                     <button
@@ -2008,15 +2009,15 @@ function AppDashboard({ user, logout }) {
 
                   <div>
                     {[
-                      { id: 'healthGrid', label: `Forest Health Grid (${stats.totalHealthCells})`, color: '#22c55e' },
-                      { id: 'terrainRoute', label: `Terrain TSP Route (${stats.terrainDist}m)`, color: '#00e5ff' },
-                      { id: 'stops', label: `Numbered Audit Stops (${stats.highPriority})`, color: '#ef4444' },
-                      { id: 'boundary', label: 'Project Corridor (24% Area)', color: '#ef4444' },
-                      { id: 'trees', label: `Validated Trees (${stats.totalTrees})`, color: '#38bdf8' },
-                      { id: 'priority', label: `Priority Trees (${stats.insideTrees + stats.outsideTrees})`, color: '#f59e0b' },
+                      { id: 'healthGrid', label: `Forest Health Grid (${stats.totalHealthCells})`, color: '#16a34a' },
+                      { id: 'terrainRoute', label: `Terrain TSP Route (${stats.terrainDist}m)`, color: '#468585' },
+                      { id: 'stops', label: `Numbered Audit Stops (${stats.highPriority})`, color: '#dc2626' },
+                      { id: 'boundary', label: 'Project Corridor (24% Area)', color: '#dc2626' },
+                      { id: 'trees', label: `Validated Trees (${stats.totalTrees})`, color: '#80BCBD' },
+                      { id: 'priority', label: `Priority Trees (${stats.insideTrees + stats.outsideTrees})`, color: '#d97706' },
                       { id: 'degradation', label: `Degradation Zones (${stats.totalDegPolygons})`, color: '#991b1b' },
                       { id: 'legacyRoute', label: `Route (ExG, legacy, ${stats.legacyDist}m)`, color: '#c084fc' },
-                      { id: 'fires', label: `NASA FIRMS Fires (${stats.fireCount})`, color: '#f97316' },
+                      { id: 'fires', label: `NASA FIRMS Fires (${stats.fireCount})`, color: '#ea580c' },
                     ].map((item) => (
                       <label key={item.id} className="layer-item">
                         <div className="layer-left">
@@ -2035,13 +2036,13 @@ function AppDashboard({ user, logout }) {
 
                   {/* Dynamic Forest Health Legend */}
                   {layers.healthGrid && (
-                    <div className="legend-box" style={{ marginTop: '8px', borderTop: '1px solid #143624', paddingTop: '6px' }}>
-                      <div style={{ fontWeight: 600, color: '#34d399' }}>Forest Health Grades (25m):</div>
+                    <div className="legend-box" style={{ marginTop: '8px', borderTop: '1px solid var(--vd-border-subtle)', paddingTop: '6px' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--vd-deep)' }}>Forest Health Grades (25m):</div>
                       <div className="legend-swatches">
-                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> A ({stats.gradeA})</span>
-                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#84cc16' }}></span> B ({stats.gradeB})</span>
-                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#f97316' }}></span> C ({stats.gradeC})</span>
-                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> D ({stats.gradeD})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#16a34a' }}></span> A ({stats.gradeA})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#65a30d' }}></span> B ({stats.gradeB})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#ea580c' }}></span> C ({stats.gradeC})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#dc2626' }}></span> D ({stats.gradeD})</span>
                       </div>
                     </div>
                   )}
@@ -2049,11 +2050,11 @@ function AppDashboard({ user, logout }) {
                   {/* Priority Legend */}
                   {layers.priority && (
                     <div className="legend-box">
-                      <div style={{ fontWeight: 600, color: '#94a3b8' }}>Verification Priority:</div>
+                      <div style={{ fontWeight: 700, color: 'var(--vd-text-secondary)' }}>Verification Priority:</div>
                       <div className="legend-swatches">
-                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> HIGH ({stats.highPriority})</span>
-                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#f59e0b' }}></span> MED ({stats.mediumPriority})</span>
-                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> LOW ({stats.lowPriority})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#dc2626' }}></span> HIGH ({stats.highPriority})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#d97706' }}></span> MED ({stats.mediumPriority})</span>
+                        <span className="swatch-item"><span className="layer-dot" style={{ background: '#16a34a' }}></span> LOW ({stats.lowPriority})</span>
                       </div>
                     </div>
                   )}
@@ -2064,9 +2065,9 @@ function AppDashboard({ user, logout }) {
                   className="layer-panel-collapsed-btn"
                   title="Expand Map Layers Control"
                 >
-                  <Layers size={14} style={{ color: '#34d399' }} />
+                  <Layers size={14} style={{ color: 'var(--vd-deep)' }} />
                   <span>Layers ({Object.values(layers).filter(Boolean).length}/9)</span>
-                  <ChevronDown size={13} style={{ color: '#94a3b8' }} />
+                  <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />
                 </button>
               )}
               {/* Floating Reopen Handles on Map for Collapsed Right Panel */}
@@ -2086,8 +2087,8 @@ function AppDashboard({ user, logout }) {
                     onClick={() => setRightPanelOpen(true)}
                     title="Expand Audit & Inspector Panel"
                   >
-                    <ChevronLeft size={13} style={{ color: '#94a3b8' }} />
-                    <ShieldAlert size={14} style={{ color: '#34d399' }} />
+                    <ChevronLeft size={13} style={{ color: 'var(--vd-pale)' }} />
+                    <ShieldAlert size={14} style={{ color: 'var(--vd-pale)' }} />
                     <span>Audit & Alerts</span>
                   </button>
                 </>
@@ -2101,7 +2102,7 @@ function AppDashboard({ user, logout }) {
           <div className={`right-panel ${!rightPanelOpen ? 'collapsed' : ''}`}>
             <div className="right-panel-topbar">
               <div className="right-panel-title">
-                <ShieldAlert size={14} style={{ color: '#34d399' }} />
+                <ShieldAlert size={14} style={{ color: 'var(--vd-deep)' }} />
                 <span>Audit & Inspector</span>
               </div>
               <button
@@ -2122,10 +2123,10 @@ function AppDashboard({ user, logout }) {
                   style={{ cursor: 'pointer', justifyContent: 'space-between' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <ShieldAlert size={14} style={{ color: '#34d399' }} />
+                    <ShieldAlert size={14} style={{ color: 'var(--vd-deep)' }} />
                     <span>Real-Time Audit & Alerts</span>
                   </div>
-                  {alertsExpanded ? <ChevronUp size={13} style={{ color: '#94a3b8' }} /> : <ChevronDown size={13} style={{ color: '#94a3b8' }} />}
+                  {alertsExpanded ? <ChevronUp size={13} style={{ color: 'var(--vd-text-secondary)' }} /> : <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />}
                 </div>
 
                 {alertsExpanded && (
@@ -2171,19 +2172,19 @@ function AppDashboard({ user, logout }) {
                   style={{ cursor: 'pointer', justifyContent: 'space-between' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Info size={14} style={{ color: '#34d399' }} />
+                    <Info size={14} style={{ color: 'var(--vd-deep)' }} />
                     <span>Feature Inspector</span>
                   </div>
-                  {inspectorExpanded ? <ChevronUp size={13} style={{ color: '#94a3b8' }} /> : <ChevronDown size={13} style={{ color: '#94a3b8' }} />}
+                  {inspectorExpanded ? <ChevronUp size={13} style={{ color: 'var(--vd-text-secondary)' }} /> : <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />}
                 </div>
 
                 {inspectorExpanded && (
                   <div className="collapsible-section-content">
                     {selectedFeature ? (
                       <div className="inspector-card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#34d399', borderBottom: '1px solid #143624', paddingBottom: '3px', marginBottom: '5px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--vd-deep)', borderBottom: '1px solid rgba(70,133,133,0.2)', paddingBottom: '3px', marginBottom: '5px' }}>
                           <span>TYPE: {selectedFeature.type.toUpperCase()}</span>
-                          <button onClick={() => setSelectedFeature(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>
+                          <button onClick={() => setSelectedFeature(null)} style={{ background: 'none', border: 'none', color: 'var(--vd-text-secondary)', cursor: 'pointer', fontSize: '10px', fontWeight: 600 }}>
                             Clear
                           </button>
                         </div>
@@ -2191,12 +2192,12 @@ function AppDashboard({ user, logout }) {
                         {selectedFeature.type === 'tree' && (
                           <div>
                             <div className="inspector-row"><span className="inspector-key">Tree ID:</span><span className="inspector-val">#{selectedFeature.properties.tree_id}</span></div>
-                            <div className="inspector-row"><span className="inspector-key">Priority:</span><span className="inspector-val" style={{ color: selectedFeature.properties.verification_priority === 'HIGH' ? '#f87171' : '#fbbf24' }}>{selectedFeature.properties.verification_priority}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Priority:</span><span className="inspector-val" style={{ color: selectedFeature.properties.verification_priority === 'HIGH' ? '#dc2626' : '#d97706' }}>{selectedFeature.properties.verification_priority}</span></div>
                             <div className="inspector-row"><span className="inspector-key">Confidence:</span><span className="inspector-val">{(selectedFeature.properties.confidence * 100).toFixed(1)}%</span></div>
                             <div className="inspector-row"><span className="inspector-key">Corridor:</span><span className="inspector-val">{selectedFeature.properties.inside_boundary ? 'YES (AFFECTED)' : 'NO (SAFE)'}</span></div>
                             <div className="inspector-row"><span className="inspector-key">UTM Easting:</span><span className="inspector-val">{selectedFeature.properties.geo_easting}</span></div>
                             <div className="inspector-row"><span className="inspector-key">UTM Northing:</span><span className="inspector-val">{selectedFeature.properties.geo_northing}</span></div>
-                            <div style={{ fontSize: '9.5px', color: '#cbd5e1', marginTop: '4px', fontStyle: 'italic' }}>{selectedFeature.properties.priority_reason}</div>
+                            <div style={{ fontSize: '9.5px', color: 'var(--vd-text-secondary)', marginTop: '4px', fontStyle: 'italic' }}>{selectedFeature.properties.priority_reason}</div>
                           </div>
                         )}
 
@@ -2213,7 +2214,7 @@ function AppDashboard({ user, logout }) {
 
                         {selectedFeature.type === 'degradation' && (
                           <div>
-                            <div className="inspector-row"><span className="inspector-key">Class:</span><span className="inspector-val" style={{ color: selectedFeature.properties.class_name === 'removal' ? '#ef4444' : '#fb923c', fontWeight: 'bold' }}>{selectedFeature.properties.class_name ? selectedFeature.properties.class_name.toUpperCase() : 'LOSS'}</span></div>
+                            <div className="inspector-row"><span className="inspector-key">Class:</span><span className="inspector-val" style={{ color: selectedFeature.properties.class_name === 'removal' ? '#dc2626' : '#d97706', fontWeight: 'bold' }}>{selectedFeature.properties.class_name ? selectedFeature.properties.class_name.toUpperCase() : 'LOSS'}</span></div>
                             <div className="inspector-row"><span className="inspector-key">Impact Area:</span><span className="inspector-val">{selectedFeature.properties.area_m2} m²</span></div>
                             <div className="inspector-row"><span className="inspector-key">Tier:</span><span className="inspector-val">{selectedFeature.properties.class_name === 'removal' ? 'ΔH ≤ -5.0 m' : '-5.0m < ΔH ≤ -2.0m'}</span></div>
                           </div>
@@ -2240,7 +2241,7 @@ function AppDashboard({ user, logout }) {
                         )}
                       </div>
                     ) : (
-                      <div style={{ fontSize: '10px', color: '#64748b', fontStyle: 'italic', padding: '8px', background: '#07130d', borderRadius: '6px', border: '1px solid #143624' }}>
+                      <div style={{ fontSize: '10.5px', color: 'var(--vd-text-secondary)', fontStyle: 'italic', padding: '10px 12px', background: '#ffffff', borderRadius: 'var(--vd-radius-sm)', border: '1px solid var(--vd-border-subtle)' }}>
                         Click on any marker, cell, zone, or route on the map to inspect attributes.
                       </div>
                     )}
@@ -2256,10 +2257,10 @@ function AppDashboard({ user, logout }) {
                   style={{ cursor: 'pointer', justifyContent: 'space-between' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Navigation size={14} style={{ color: '#34d399' }} />
+                    <Navigation size={14} style={{ color: 'var(--vd-deep)' }} />
                     <span>13 Audit Stops (Sequence)</span>
                   </div>
-                  {stopsExpanded ? <ChevronUp size={13} style={{ color: '#94a3b8' }} /> : <ChevronDown size={13} style={{ color: '#94a3b8' }} />}
+                  {stopsExpanded ? <ChevronUp size={13} style={{ color: 'var(--vd-text-secondary)' }} /> : <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />}
                 </div>
 
                 {stopsExpanded && (
@@ -2271,13 +2272,13 @@ function AppDashboard({ user, logout }) {
                           className="stops-row"
                           onClick={() => handleFocusStop(st)}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ background: '#ef4444', color: 'white', width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8.5px', fontWeight: 800 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ background: 'var(--vd-aqua)', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9.5px', fontWeight: 800 }}>
                               {st.stopNum}
                             </span>
-                            <span style={{ fontWeight: 600, color: '#f1f5f9' }}>Tree #{st.treeId}</span>
+                            <span style={{ fontWeight: 700, color: 'var(--vd-text-heading)' }}>Tree #{st.treeId}</span>
                           </div>
-                          <div style={{ color: '#fbbf24', fontFamily: 'JetBrains Mono', fontSize: '9.5px' }}>
+                          <div style={{ color: '#b45309', fontFamily: 'JetBrains Mono', fontSize: '9.5px', fontWeight: 600 }}>
                             {(st.properties.confidence * 100).toFixed(1)}%
                           </div>
                         </div>
@@ -2290,7 +2291,7 @@ function AppDashboard({ user, logout }) {
               {/* DATA SOURCES */}
               <div className="panel-section">
                 <div className="section-heading">
-                  <FileText size={14} style={{ color: '#34d399' }} />
+                  <FileText size={14} style={{ color: 'var(--vd-deep)' }} />
                   <span>Verified Data Feeds</span>
                 </div>
 
