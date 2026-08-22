@@ -57,6 +57,9 @@ venv.bak/
 
 # PyTorch Lightning & DeepForest logs
 lightning_logs/
+backend/lightning_logs/
+version_*/
+.hf_cache/
 
 # Node & Frontend
 node_modules/

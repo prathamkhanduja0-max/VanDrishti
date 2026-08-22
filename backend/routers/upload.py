@@ -27,3 +27,12 @@ async def upload_file(
 @router.get("/list", response_model=List[UploadResponse], summary="List uploaded datasets and their metadata")
 async def get_uploaded_files():
     return list_uploads()
+
+@router.get("/{upload_id}/cost-surface", summary="Get or generate routable cost surface for uploaded raster")
+async def get_cost_surface(upload_id: str):
+    from backend.services.upload_service import get_upload_cost_surface
+    cs = get_upload_cost_surface(upload_id)
+    if not cs:
+        raise HTTPException(status_code=404, detail=f"Cost surface not found for upload {upload_id}")
+    return cs
+

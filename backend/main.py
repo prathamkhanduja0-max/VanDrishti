@@ -3,8 +3,25 @@ backend/main.py
 Main entry point for VanDrishti FastAPI Backend Server.
 """
 
+import os
+import sys
+from pathlib import Path
+
+# Configure safe local HuggingFace cache directory before any ML imports
+_cache = Path(__file__).resolve().parent.parent / ".hf_cache"
+_cache.mkdir(parents=True, exist_ok=True)
+os.environ["HF_HOME"] = str(_cache)
+os.environ["HUGGINGFACE_HUB_CACHE"] = str(_cache / "hub")
+
 import matplotlib
 matplotlib.use("Agg")
+
+# Add repo root and backend dir to sys.path
+REPO_ROOT = Path(__file__).resolve().parent.parent
+BACKEND_DIR = Path(__file__).resolve().parent
+for p in [str(REPO_ROOT), str(BACKEND_DIR)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

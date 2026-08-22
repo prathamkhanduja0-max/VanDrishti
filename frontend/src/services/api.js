@@ -97,4 +97,16 @@ export const apiService = {
     if (!res.ok) throw new Error(`Upload failed: ${res.statusText}`);
     return res.json();
   },
+  getUploadCostSurface: async (uploadId) => {
+    try {
+      const res = await fetch(`${API_BASE}/upload/${uploadId}/cost-surface`);
+      if (res.ok) {
+        return res.json();
+      }
+    } catch (err) {
+      console.warn(`[VanDrishti API] Failed fetching cost surface for upload ${uploadId}:`, err);
+    }
+    return null;
+  },
 };
+
