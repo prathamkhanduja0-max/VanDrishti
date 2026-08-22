@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -515,12 +515,56 @@ function AppDashboard({ user, logout }) {
     }
   }, [p2pEnabled, p2pStart, p2pEnd, activeCostSurface]);
 
-  const handleResetP2P = () => {
+  const savedLayersRef = useRef(null);
+
+  const startP2PMode = useCallback(() => {
+    // Save active layer states and temporarily hide them for unobstructed clicking
+    savedLayersRef.current = { ...layers };
+    setLayers({
+      healthGrid: false,
+      terrainRoute: false,
+      stops: false,
+      boundary: false,
+      trees: false,
+      priority: false,
+      degradation: false,
+      fires: false,
+      legacyRoute: false,
+    });
+    setP2pEnabled(true);
     setP2pStart(null);
     setP2pEnd(null);
     setP2pRouteResult(null);
     setP2pError(null);
-  };
+  }, [layers]);
+
+  const exitP2PMode = useCallback(() => {
+    setP2pEnabled(false);
+    setP2pStart(null);
+    setP2pEnd(null);
+    setP2pRouteResult(null);
+    setP2pError(null);
+    // Restore layers that were enabled before entering P2P mode
+    if (savedLayersRef.current) {
+      setLayers(savedLayersRef.current);
+      savedLayersRef.current = null;
+    }
+  }, []);
+
+  const toggleP2PMode = useCallback(() => {
+    if (!p2pEnabled) {
+      startP2PMode();
+    } else {
+      exitP2PMode();
+    }
+  }, [p2pEnabled, startP2PMode, exitP2PMode]);
+
+  const handleResetP2P = useCallback(() => {
+    setP2pStart(null);
+    setP2pEnd(null);
+    setP2pRouteResult(null);
+    setP2pError(null);
+  }, []);
 
   // Handle Preset Selection in "Analyze Your Forest"
   const handleSelectUploadPreset = async (preset) => {
@@ -824,6 +868,7 @@ function AppDashboard({ user, logout }) {
                 <button
                   key={item.id}
                   onClick={() => {
+                    if (p2pEnabled) exitP2PMode();
                     if (item.id === 'Analyze Your Forest') {
                       if (activeNav === 'Analyze Your Forest') {
                         // Toggle OFF -> return to last selected main nav
@@ -884,10 +929,7 @@ function AppDashboard({ user, logout }) {
           <div className="topbar-actions">
             {/* Interactive Point-to-Point Dijkstra Toggle */}
             <button
-              onClick={() => {
-                setP2pEnabled(!p2pEnabled);
-                if (p2pEnabled) handleResetP2P();
-              }}
+              onClick={toggleP2PMode}
               className={`p2p-toggle-btn ${p2pEnabled ? 'active' : ''}`}
               title="Click two points on the map to compute real-time least-cost path"
             >
@@ -1321,7 +1363,7 @@ function AppDashboard({ user, logout }) {
                         <RotateCcw size={11} style={{ display: 'inline', marginRight: '4px' }} />
                         Reset Points
                       </button>
-                      <button onClick={() => { setP2pEnabled(false); handleResetP2P(); }} className="p2p-action-btn">
+                      <button onClick={exitP2PMode} className="p2p-action-btn">
                         <X size={11} style={{ display: 'inline', marginRight: '4px' }} />
                         Exit P2P
                       </button>
@@ -1418,6 +1460,12 @@ function AppDashboard({ user, logout }) {
                             <span style="font-size:10px; color:#6b9494;">${isDeepForest ? 'DeepForest (NEON-pretrained RetinaNet)' : 'Single-Raster Optical Crown Preview'}</span>
                           </div>
                         `);
+                        layer.on('click', (e) => {
+                          if (p2pEnabled) {
+                            layer.closePopup();
+                            handleMapPointClick(e.latlng);
+                          }
+                        });
                       }}
                     />
                   )}
@@ -1543,8 +1591,8 @@ function AppDashboard({ user, logout }) {
 
                   {/* Step-by-Step Instruction */}
                   <div className="p2p-instruction">
-                    {!p2pStart && '1. Click anywhere on the map to set Start Point A.'}
-                    {p2pStart && !p2pEnd && '2. Click your target destination to run Dijkstra.'}
+                    {!p2pStart && '1. Click anywhere inside the 250m study area to set Start Point A (layers temporarily hidden for clear point selection).'}
+                    {p2pStart && !p2pEnd && '2. Click your target destination to solve least-cost Dijkstra route.'}
                     {p2pRouteResult && 'Least-cost Dijkstra path successfully generated across terrain & canopy cost surface.'}
                     {p2pError && <span style={{ color: '#dc2626' }}>{p2pError}</span>}
                   </div>
@@ -1588,7 +1636,7 @@ function AppDashboard({ user, logout }) {
                       <RotateCcw size={11} style={{ display: 'inline', marginRight: '4px' }} />
                       Reset Points
                     </button>
-                    <button onClick={() => { setP2pEnabled(false); handleResetP2P(); }} className="p2p-action-btn">
+                    <button onClick={exitP2PMode} className="p2p-action-btn">
                       <X size={11} style={{ display: 'inline', marginRight: '4px' }} />
                       Exit P2P
                     </button>
@@ -2006,6 +2054,12 @@ function AppDashboard({ user, logout }) {
                       <ChevronUp size={14} />
                     </button>
                   </div>
+
+                  {p2pEnabled && (
+                    <div style={{ fontSize: '10px', color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', padding: '5px 7px', borderRadius: '5px', margin: '6px 0 8px 0', lineHeight: 1.35 }}>
+                      ⚡ <b>P2P Router Active:</b> Layers are temporarily hidden for clear point selection. They will restore automatically when you exit P2P mode.
+                    </div>
+                  )}
 
                   <div>
                     {[
