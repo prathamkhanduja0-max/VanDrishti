@@ -72,6 +72,19 @@ def process_uploaded_file(file: UploadFile, file_type: str = "rgb_t2") -> Dict[s
         except Exception as assess_err:
             metadata["assessment_error"] = str(assess_err)
 
+        # Generate routable cost surface for interactive Dijkstra routing
+        try:
+            from upload_cost_surface import build_upload_cost_surface
+            cost_surface = build_upload_cost_surface(rgb_path=target_path, name=file.filename)
+            cost_surface_file = UPLOADS_DIR / f"{upload_id}_cost_surface.json"
+            with open(cost_surface_file, "w", encoding="utf-8") as cs_f:
+                json.dump(cost_surface, cs_f)
+            metadata["cost_surface_file"] = str(cost_surface_file)
+            metadata["routable"] = cost_surface.get("routable", False)
+            metadata["routing_mode"] = cost_surface.get("mode_label")
+        except Exception as cs_err:
+            metadata["cost_surface_error"] = str(cs_err)
+
     # 2. Vector Processing (.geojson, .json, .shp, .gpkg, .kml)
     elif target_path.suffix.lower() in [".geojson", ".json", ".shp", ".gpkg", ".kml"]:
         try:
@@ -158,3 +171,34 @@ def process_uploaded_file(file: UploadFile, file_type: str = "rgb_t2") -> Dict[s
     # Return response including top-level assessment for immediate frontend consumption
     record["assessment"] = assessment
     return record
+
+
+def get_upload_cost_surface(upload_id: str) -> Dict[str, Any]:
+    """Retrieves or generates on-the-fly the cost surface for a specific upload."""
+    from backend.database import get_db_connection
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
+    conn.close()
+    if not row:
+        return {"routable": False, "reason": f"Upload record '{upload_id}' not found"}
+
+    file_path = Path(row["file_path"])
+    cost_surface_file = UPLOADS_DIR / f"{upload_id}_cost_surface.json"
+    if cost_surface_file.exists():
+        try:
+            with open(cost_surface_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    if file_path.suffix.lower() in [".tif", ".tiff", ".img", ".vrt"] and file_path.exists():
+        try:
+            from upload_cost_surface import build_upload_cost_surface
+            cost_surface = build_upload_cost_surface(rgb_path=file_path, name=row["filename"])
+            with open(cost_surface_file, "w", encoding="utf-8") as cs_f:
+                json.dump(cost_surface, cs_f)
+            return cost_surface
+        except Exception as err:
+            return {"routable": False, "reason": f"Failed generating cost surface: {err}"}
+
+    return {"routable": False, "reason": "Upload is not a valid raster dataset for cost surface generation"}

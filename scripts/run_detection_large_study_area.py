@@ -19,30 +19,35 @@ from shapely.geometry import Point
 from deepforest.main import deepforest
 
 
-def crop_250m_tile(src_tif: Path, dst_tif: Path):
-    """Crops the densest 250m x 250m window from the 1km tile and writes GeoTIFF."""
-    print(f"--- Step 1: Cropping 250m x 250m Window from {src_tif.name} ---")
-    
-    col_off = 7000
-    row_off = 0
-    width_px = 2500
-    height_px = 2500
-    
-    # Target UTM bounds (EPSG:32617)
-    left = 407700.0
-    bottom = 3283750.0
-    right = 407950.0
-    top = 3284000.0
-    
+def crop_250m_tile(src_tif: Path, dst_tif: Path,
+                   col_off: int = 7000, row_off: int = 0,
+                   width_px: int = 2500, height_px: int = 2500):
+    """Crops a sub-window from the source tile and writes a correctly georeferenced GeoTIFF.
+
+    The window is the only input; its ground bounds are DERIVED from the source raster's own
+    transform rather than stated separately. Previously the pixel window and the UTM bounds
+    were two independent hardcoded constants that had to agree by hand -- if either changed,
+    the crop would be written with a valid-looking but wrong geotransform, misplacing every
+    downstream detection with no error raised. Deriving the bounds makes that class of silent
+    misregistration impossible, and makes the script work on any tile or CRS.
+    """
+    print(f"--- Step 1: Cropping {width_px}x{height_px}px Window from {src_tif.name} ---")
+
     window = Window(col_off=col_off, row_off=row_off, width=width_px, height=height_px)
-    
+
     with rasterio.open(src_tif) as src:
         src_crs = src.crs
         crop_data = src.read(window=window)
-        # Verify shape
+
+        # Ground bounds of this window, taken from the source georeferencing itself.
+        left, bottom, right, top = rasterio.windows.bounds(window, src.transform)
+
         print(f"Source CRS: {src_crs}")
         print(f"Cropped data shape: {crop_data.shape} (Bands, Height, Width)")
-        
+        print(f"Derived bounds: [{left}, {bottom}, {right}, {top}]")
+        res_x = abs(src.transform.a)
+        print(f"Ground extent: {(right-left):.1f} m x {(top-bottom):.1f} m @ {res_x} m/px")
+
         # New transform for the cropped tile
         crop_transform = from_bounds(left, bottom, right, top, width_px, height_px)
         

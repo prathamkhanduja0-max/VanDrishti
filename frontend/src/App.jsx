@@ -46,6 +46,7 @@ import {
   X
 } from 'lucide-react';
 import { computePointToPointPath } from './utils/dijkstra';
+import { apiService } from './services/api';
 
 // Custom Marker Icons for Route Stops and Entry Point
 const createStopIcon = (number, bg = '#ef4444') => {
@@ -453,14 +454,55 @@ export default function App() {
     setUploadLoading(true);
     handleResetP2P();
     try {
-      const url = preset === 'teak' ? '/data/teak_assessment.json' : '/data/osbs_full_assessment.json';
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setUploadedAssessment(data);
+      const assessmentData = await apiService.getAssessment(preset);
+      if (assessmentData) {
+        setUploadedAssessment(assessmentData);
+      }
+      const costData = await apiService.getCostSurface(preset);
+      if (costData) {
+        setActiveCostSurface(costData);
       }
     } catch (e) {
       console.error('Error loading preset assessment:', e);
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  // Handle Real File Upload in "Analyze Your Forest"
+  const handleFileUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadLoading(true);
+    handleResetP2P();
+    setSelectedUploadPreset('custom');
+
+    const fileType = file.name.endsWith('.geojson') || file.name.endsWith('.json') ? 'boundary' : 'rgb_t2';
+
+    try {
+      const res = await apiService.uploadDataset(file, fileType);
+      if (res?.assessment) {
+        setUploadedAssessment(res.assessment);
+      } else if (res?.metadata?.assessment) {
+        setUploadedAssessment(res.metadata.assessment);
+      }
+
+      // Fetch and activate the cost surface for this upload
+      if (res?.id) {
+        const costSurface = await apiService.getUploadCostSurface(res.id);
+        if (costSurface) {
+          setActiveCostSurface(costSurface);
+          if (costSurface.routable) {
+            setP2pEnabled(true);
+          } else {
+            setP2pEnabled(false);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('File upload failed:', err);
+      alert(`Upload failed: ${err.message}`);
     } finally {
       setUploadLoading(false);
     }
@@ -801,20 +843,16 @@ export default function App() {
                 <label className="upload-dropzone">
                   <UploadCloud size={28} style={{ color: '#34d399' }} />
                   <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: '12px' }}>
-                    Upload Custom GeoTIFF (.tif, .tiff)
+                    Upload Custom GeoTIFF (.tif) or Vector (.geojson)
                   </div>
                   <div style={{ fontSize: '10.5px', color: '#94a3b8' }}>
-                    Drag & drop or click to analyze raster headers
+                    Drag & drop or click to run AI/ExG detection & interactive routing
                   </div>
                   <input
                     type="file"
-                    accept=".tif,.tiff"
+                    accept=".tif,.tiff,.geojson,.json"
                     style={{ display: 'none' }}
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) {
-                        alert(`Loaded custom raster: ${e.target.files[0].name}. (Analyzed via VanDrishti capability engine)`);
-                      }
-                    }}
+                    onChange={handleFileUpload}
                   />
                 </label>
 
@@ -870,25 +908,32 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Optical Detection Preview Result Card */}
+                {/* Detection Preview / DeepForest Result Card */}
                 {uploadedAssessment?.detection_results && (
-                  <div className="meta-grid-card" style={{ borderColor: '#059669', background: 'rgba(6, 78, 59, 0.25)' }}>
+                  <div className="meta-grid-card" style={{ borderColor: uploadedAssessment.detection_results.method === 'deepforest' ? '#10b981' : '#059669', background: 'rgba(6, 78, 59, 0.25)' }}>
                     <div style={{ fontWeight: 700, color: '#34d399', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Trees size={14} />
-                        <span>Optical Crown Preview</span>
+                        <span>
+                          {uploadedAssessment.detection_results.method === 'deepforest'
+                            ? 'DeepForest (NEON-pretrained RetinaNet)'
+                            : 'Fast optical preview, not AI-validated'}
+                        </span>
                       </div>
-                      <span className="badge-pill full" style={{ fontSize: '9.5px' }}>
-                        {uploadedAssessment.detection_results.method === 'exg_peak_heuristic' ? 'Fast ExG' : 'AI Detector'}
+                      <span className={`badge-pill ${uploadedAssessment.detection_results.method === 'deepforest' ? 'full' : 'degraded'}`} style={{ fontSize: '9.5px' }}>
+                        {uploadedAssessment.detection_results.method === 'deepforest' ? 'DeepForest' : 'ExG Heuristic'}
                       </span>
                     </div>
+
                     <div style={{ marginTop: '8px' }}>
                       <div style={{ fontSize: '20px', fontWeight: 800, color: '#6ee7b7', letterSpacing: '-0.5px' }}>
                         {(uploadedAssessment.detection_results.count || 0).toLocaleString()}
                         <span style={{ fontSize: '12px', fontWeight: 500, color: '#94a3b8', marginLeft: '6px' }}>
-                          greenness peaks
+                          {uploadedAssessment.detection_results.method === 'deepforest' ? 'crowns detected' : 'greenness peaks'}
                         </span>
                       </div>
+
+                      {/* Truncation Subline */}
                       {uploadedAssessment.detection_results.truncated && (
                         <div style={{ fontSize: '10.5px', color: '#fbbf24', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <span>•</span>
@@ -897,9 +942,29 @@ export default function App() {
                           </span>
                         </div>
                       )}
-                      <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '5px' }}>
-                        Fast optical peak detection for instant visual feedback on uncalibrated imagery.
-                      </div>
+
+                      {/* Fallback Reason */}
+                      {uploadedAssessment.detection_results.fallback_reason && (
+                        <div style={{ fontSize: '10px', color: '#f59e0b', marginTop: '4px', background: 'rgba(245, 158, 11, 0.1)', padding: '4px 6px', borderRadius: '4px' }}>
+                          <b>ExG Fallback:</b> {uploadedAssessment.detection_results.fallback_reason}
+                        </div>
+                      )}
+
+                      {/* DeepForest Post-Filters */}
+                      {uploadedAssessment.detection_results.method === 'deepforest' && uploadedAssessment.detection_results.filters && (
+                        <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '5px' }}>
+                          Raw detections: {uploadedAssessment.detection_results.raw_count?.toLocaleString()} • 
+                          Size filter dropped: {uploadedAssessment.detection_results.filters.size_dropped || 0} • 
+                          Dedup dropped: {uploadedAssessment.detection_results.filters.dedup_dropped || 0}
+                        </div>
+                      )}
+
+                      {/* Detection Notes */}
+                      {uploadedAssessment.detection_results.notes?.length > 0 && (
+                        <div style={{ fontSize: '9.5px', color: '#cbd5e1', marginTop: '4px', fontStyle: 'italic' }}>
+                          {uploadedAssessment.detection_results.notes[0]}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1003,7 +1068,6 @@ export default function App() {
                         )}
                       </div>
                     )}
-
                     <div className="p2p-actions">
                       <button onClick={handleResetP2P} className="p2p-action-btn">
                         <RotateCcw size={11} style={{ display: 'inline', marginRight: '4px' }} />
@@ -1017,13 +1081,24 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Non-routable Warning Banner if user uploaded non-projected raster */}
+                {activeCostSurface && activeCostSurface.routable === false && !p2pEnabled && (
+                  <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 1000, background: 'rgba(15, 23, 42, 0.92)', border: '1px solid #ef4444', borderRadius: '8px', padding: '10px 14px', maxWidth: '340px', fontSize: '11px', color: '#f87171', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                    <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', color: '#fca5a5' }}>
+                      <AlertTriangle size={14} />
+                      <span>P2P Routing Disabled</span>
+                    </div>
+                    <div>{activeCostSurface.reason}</div>
+                  </div>
+                )}
+
                 <MapContainer
                   center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
                   zoom={selectedUploadPreset === 'teak' ? 19 : 17}
                   minZoom={7}
                   maxZoom={22}
                   scrollWheelZoom={true}
-                  style={{ height: '100%', width: '100%', cursor: p2pEnabled ? 'crosshair' : 'default' }}
+                  style={{ height: '100%', width: '100%', cursor: (p2pEnabled && activeCostSurface?.routable !== false) ? 'crosshair' : 'default' }}
                 >
                   <MapController
                     center={selectedUploadPreset === 'teak' ? [37.000, -119.011] : mapCenter}
@@ -1031,7 +1106,7 @@ export default function App() {
                   />
 
                   {/* Click Listener for P2P Dijkstra */}
-                  <MapClickHandler p2pEnabled={p2pEnabled} onMapClick={handleMapPointClick} />
+                  <MapClickHandler p2pEnabled={p2pEnabled && activeCostSurface?.routable !== false} onMapClick={handleMapPointClick} />
 
                   {basemap === 'satellite' ? (
                     <TileLayer
@@ -1051,12 +1126,13 @@ export default function App() {
                   {/* Render Detected Crowns */}
                   {uploadedAssessment?.detection_results?.geojson && (
                     <GeoJSON
-                      key={`upload-trees-${selectedUploadPreset}`}
+                      key={`upload-trees-${selectedUploadPreset}-${uploadedAssessment?.detection_results?.method}`}
                       data={uploadedAssessment.detection_results.geojson}
                       pointToLayer={(feature, latlng) => {
+                        const isDf = uploadedAssessment?.detection_results?.method === 'deepforest' || feature.properties?.score !== undefined;
                         return L.circleMarker(latlng, {
-                          radius: 4.5,
-                          fillColor: '#34d399',
+                          radius: isDf ? 5.0 : 4.5,
+                          fillColor: isDf ? '#10b981' : '#34d399',
                           color: '#ffffff',
                           weight: 1.0,
                           fillOpacity: 0.85,
@@ -1064,14 +1140,17 @@ export default function App() {
                       }}
                       onEachFeature={(feature, layer) => {
                         const p = feature.properties || {};
-                        const val = p.exg_strength !== undefined ? p.exg_strength : p.confidence;
-                        const label = p.exg_strength !== undefined ? 'ExG Strength' : 'Confidence';
+                        const method = uploadedAssessment?.detection_results?.method;
+                        const isDeepForest = method === 'deepforest' || p.score !== undefined;
+                        const val = p.score !== undefined ? p.score : (p.exg_strength !== undefined ? p.exg_strength : p.confidence);
+                        const label = isDeepForest ? 'AI Score (RetinaNet)' : (p.exg_strength !== undefined ? 'ExG Strength' : 'Confidence');
                         layer.bindPopup(`
                           <div style="font-size:12px;">
                             <b style="color:#34d399;">Detected Tree Crown #${p.tree_id}</b><br/>
                             <b>${label}:</b> ${val !== undefined ? (val * 100).toFixed(1) + '%' : 'N/A'}<br/>
+                            ${p.crown_diam_m !== undefined ? `<b>Crown Diameter:</b> ${p.crown_diam_m} m<br/>` : ''}
                             <b>Pixel Coordinates:</b> [${p.pixel_x}, ${p.pixel_y}]<br/>
-                            <span style="font-size:10px; color:#94a3b8;">Single-Raster Optical Crown Preview</span>
+                            <span style="font-size:10px; color:#94a3b8;">${isDeepForest ? 'DeepForest (NEON-pretrained RetinaNet)' : 'Single-Raster Optical Crown Preview'}</span>
                           </div>
                         `);
                       }}
