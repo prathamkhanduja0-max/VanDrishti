@@ -734,6 +734,13 @@ function AppDashboard({ user, logout }) {
     const thinningCount = degFeatures.filter((f) => f.properties?.class_name === 'thinning' || f.properties?.class_id === 2).length;
     const totalDegPolygons = degFeatures.length;
 
+    // Estimated Green Cover (median crown = 9.1 m², study area = 250m × 250m = 62,500 m²)
+    const MEDIAN_CROWN_M2 = 9.1;
+    const STUDY_AREA_M2 = 62500;
+    const validatedTreeCount = treesData?.features?.length || 0;
+    const greenCoverAreaM2 = validatedTreeCount * MEDIAN_CROWN_M2;
+    const greenCoverPercent = ((greenCoverAreaM2 / STUDY_AREA_M2) * 100).toFixed(1);
+
     return {
       totalTrees,
       insideTrees,
@@ -756,6 +763,10 @@ function AppDashboard({ user, logout }) {
       totalDegPolygons,
       removalCount,
       thinningCount,
+      greenCoverPercent,
+      greenCoverAreaM2: greenCoverAreaM2.toLocaleString(),
+      studyAreaM2: STUDY_AREA_M2.toLocaleString(),
+      validatedTreeCount,
     };
   }, [treesData, priorityData, fireHotspotsData, terrainRouteData, legacyRouteData, healthGridData, degradationData]);
 
@@ -1050,6 +1061,45 @@ function AppDashboard({ user, logout }) {
             </div>
             <div className="stat-icon-wrap cyan">
               <Navigation size={18} />
+            </div>
+          </div>
+
+          {/* Card 3.5 — Estimated Green Cover */}
+          <div className="stat-card" style={{ background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', borderColor: '#86efac' }}>
+            <div>
+              <div className="stat-label">Estimated Green Cover</div>
+              <div className="stat-value" style={{ color: '#166534' }}>
+                {stats.greenCoverPercent}<span className="stat-unit">%</span>
+              </div>
+              <div className="stat-sub">
+                estimated green area: {stats.greenCoverAreaM2} m²&nbsp;&nbsp;·&nbsp;&nbsp;total area: {stats.studyAreaM2} m²
+              </div>
+            </div>
+            <div className="stat-icon-wrap" style={{ background: 'linear-gradient(135deg, #86efac, #4ade80)', flexShrink: 0 }}>
+              {/* Tree + person under sun icon */}
+              <svg width="20" height="20" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="#166534" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                {/* Sun rays */}
+                <line x1="17" y1="8" x2="17" y2="4" />
+                <line x1="11" y1="11" x2="8" y2="8" />
+                <line x1="8" y1="17" x2="4" y2="17" />
+                <line x1="23" y1="6" x2="22" y2="3" />
+                {/* Tree crown (fluffy circle) */}
+                <circle cx="30" cy="22" r="13" />
+                <circle cx="22" cy="26" r="8" />
+                <circle cx="38" cy="26" r="8" />
+                {/* Trunk */}
+                <line x1="30" y1="35" x2="30" y2="50" />
+                {/* Ground */}
+                <line x1="10" y1="50" x2="54" y2="50" />
+                {/* Person body */}
+                <circle cx="43" cy="42" r="3" />
+                <line x1="43" y1="45" x2="43" y2="50" />
+                {/* Chair */}
+                <line x1="37" y1="50" x2="49" y2="50" />
+                <line x1="37" y1="44" x2="37" y2="50" />
+                <line x1="49" y1="44" x2="49" y2="50" />
+                <line x1="37" y1="44" x2="43" y2="44" />
+              </svg>
             </div>
           </div>
 
