@@ -259,6 +259,11 @@ function AppDashboard({ user, logout }) {
   const [uploadedAssessment, setUploadedAssessment] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const isUploadMode = activeNav === 'Analyze Your Forest' && Boolean(uploadedAssessment);
+  const hasDtm = Boolean(uploadedAssessment?.detected_siblings?.dtm || activeCostSurface?.active_terms?.includes('Slope'));
+  const hasChm = Boolean(uploadedAssessment?.detected_siblings?.chm || activeCostSurface?.active_terms?.includes('CHM'));
+  const hasTerrainData = hasDtm || hasChm;
+  const routingLevel = uploadedAssessment?.capabilities?.routing?.level || (hasDtm ? 'FULL' : (hasChm ? 'DEGRADED' : 'BLOCKED'));
+  const routingModeLabel = activeCostSurface?.mode_label || (routingLevel === 'FULL' ? 'terrain-aware' : (hasChm ? 'canopy-aware' : 'optical proxy'));
 
   const triggerDownload = (url) => {
     const a = document.createElement('a');
@@ -1100,14 +1105,30 @@ function AppDashboard({ user, logout }) {
             <div>
               <div className="stat-label">Terrain TSP Route</div>
               {isUploadMode ? (
-                <>
-                  <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
-                    <span className="badge-pill blocked">[BLOCKED]</span>
-                  </div>
-                  <div className="stat-sub">
-                    No DTM/CHM elevation raster
-                  </div>
-                </>
+                hasTerrainData ? (
+                  <>
+                    <div className="stat-value" style={{ fontSize: '13px', margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className={`badge-pill ${routingLevel === 'FULL' ? 'full' : 'degraded'}`}>[{routingLevel}]</span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--vd-deep)' }}>
+                        {routingModeLabel.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="stat-sub">
+                      {activeCostSurface?.active_terms
+                        ? `Terms: ${activeCostSurface.active_terms.join(' · ')} (${activeCostSurface.res_m || 'auto'}m)`
+                        : (hasDtm ? 'DTM slope + CHM impedance active' : 'CHM canopy impedance active')}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
+                      <span className="badge-pill blocked">[BLOCKED]</span>
+                    </div>
+                    <div className="stat-sub">
+                      No DTM/CHM elevation raster
+                    </div>
+                  </>
+                )
               ) : (
                 <>
                   <div className="stat-value">
@@ -1595,24 +1616,26 @@ function AppDashboard({ user, logout }) {
 
                   {/* P2P Dijkstra Result Polyline */}
                   {p2pRouteResult?.pathCoordinates && (
-                    <Polyline
-                      positions={p2pRouteResult.pathCoordinates}
-                      pathOptions={{
-                        color: '#f59e0b',
-                        weight: 5.5,
-                        opacity: 0.95,
-                        dashArray: '3, 6',
-                      }}
-                    >
-                      <Popup>
-                        <div style={{ fontSize: '12px' }}>
-                          <b style={{ color: '#f59e0b', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
-                          <b>Model:</b> {p2pRouteResult.mode_label}<br />
-                          <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
-                          <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
-                        </div>
-                      </Popup>
-                    </Polyline>
+                    <Pane name="p2pRouteUploadPane" style={{ zIndex: 650 }}>
+                      <Polyline
+                        positions={p2pRouteResult.pathCoordinates}
+                        pathOptions={{
+                          color: '#f59e0b',
+                          weight: 5.5,
+                          opacity: 0.95,
+                          dashArray: '3, 6',
+                        }}
+                      >
+                        <Popup>
+                          <div style={{ fontSize: '12px' }}>
+                            <b style={{ color: '#f59e0b', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
+                            <b>Model:</b> {p2pRouteResult.mode_label}<br />
+                            <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
+                            <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                          </div>
+                        </Popup>
+                      </Polyline>
+                    </Pane>
                   )}
                 </MapContainer>
               </div>
@@ -2115,25 +2138,28 @@ function AppDashboard({ user, logout }) {
                   </Marker>
                 )}
 
+                {/* P2P Dijkstra Result Polyline */}
                 {p2pRouteResult?.pathCoordinates && (
-                  <Polyline
-                    positions={p2pRouteResult.pathCoordinates}
-                    pathOptions={{
-                      color: '#d97706',
-                      weight: 5.5,
-                      opacity: 0.95,
-                      dashArray: '3, 6',
-                    }}
-                  >
-                    <Popup>
-                      <div style={{ fontSize: '12px' }}>
-                        <b style={{ color: '#d97706', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
-                        <b>Model:</b> {p2pRouteResult.mode_label}<br />
-                        <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
-                        <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
-                      </div>
-                    </Popup>
-                  </Polyline>
+                  <Pane name="p2pRouteOverviewPane" style={{ zIndex: 650 }}>
+                    <Polyline
+                      positions={p2pRouteResult.pathCoordinates}
+                      pathOptions={{
+                        color: '#d97706',
+                        weight: 5.5,
+                        opacity: 0.95,
+                        dashArray: '3, 6',
+                      }}
+                    >
+                      <Popup>
+                        <div style={{ fontSize: '12px' }}>
+                          <b style={{ color: '#d97706', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
+                          <b>Model:</b> {p2pRouteResult.mode_label}<br />
+                          <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
+                          <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                        </div>
+                      </Popup>
+                    </Polyline>
+                  </Pane>
                 )}
               </MapContainer>
 
@@ -2294,16 +2320,37 @@ function AppDashboard({ user, logout }) {
                         </div>
 
                         <div className="alert-card route">
-                          <div className="alert-title" style={{ justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <Navigation size={13} />
-                              <span>Terrain TSP</span>
-                            </div>
-                            <span className="badge-pill blocked">[BLOCKED]</span>
-                          </div>
-                          <div className="alert-text">
-                            No DTM/CHM uploaded — terrain routing unavailable
-                          </div>
+                          {hasTerrainData ? (
+                            <>
+                              <div className="alert-title" style={{ justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <Navigation size={13} />
+                                  <span>Terrain Routing ({routingModeLabel})</span>
+                                </div>
+                                <span className={`badge-pill ${routingLevel === 'FULL' ? 'full' : 'degraded'}`}>
+                                  [{routingLevel}]
+                                </span>
+                              </div>
+                              <div className="alert-text">
+                                {hasDtm
+                                  ? `Slope-aware Tobler impedance enabled with DTM (${activeCostSurface?.diagnostics?.relief_m ? `${activeCostSurface.diagnostics.relief_m.toFixed(1)}m relief` : 'elevation model'})`
+                                  : 'CHM canopy impedance active; DTM slope disabled (flat-ground baseline)'}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="alert-title" style={{ justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <Navigation size={13} />
+                                  <span>Terrain TSP</span>
+                                </div>
+                                <span className="badge-pill blocked">[BLOCKED]</span>
+                              </div>
+                              <div className="alert-text">
+                                No DTM/CHM uploaded — terrain routing unavailable
+                              </div>
+                            </>
+                          )}
                         </div>
 
                         <div className="alert-card fire">
