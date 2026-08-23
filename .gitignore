@@ -79,7 +79,10 @@ data/raw/neon/large/2019_OSBS_5_407000_3283000_image.tif
 .DS_Store
 Thumbs.db
 backend/vandrishti.db
+backend/vandrishti.db-shm
+backend/vandrishti.db-wal
 backend/__pycache__/
 data/uploads/
 data/reports/
+data/raw/neon/download/
 

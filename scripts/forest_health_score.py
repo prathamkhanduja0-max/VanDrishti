@@ -22,6 +22,57 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import config_loader
 
 CANOPY_MIN_H = 2.0      # m, threshold for "canopy present"
+NICE_CELL_SIZES = (25.0, 20.0, 10.0, 5.0, 4.0, 2.0)
+MIN_GRID_CELLS = 8
+FLOOR_CELL_SIZE_M = 2.0
+
+
+def compute_adaptive_cell_size(
+    raster_source: Union[str, Path, tuple[int, int]],
+    res_m: Optional[float] = None,
+    min_cells: int = MIN_GRID_CELLS,
+    floor_m: float = FLOOR_CELL_SIZE_M,
+    nice_sizes: tuple[float, ...] = NICE_CELL_SIZES,
+) -> float:
+    """
+    Computes the largest 'nice' grid cell size in metres that still yields
+    at least a min_cells x min_cells (default 8x8) grid over the raster extent,
+    clamped to a sensible floor (default 2 m).
+    
+    For a 250 m raster (e.g. OSBS_large), resolves to 25.0 m (10x10 = 100 cells).
+    For a 40 m raster, resolves to 5.0 m (8x8 = 64 cells) or 4.0 m depending on extent.
+    """
+    width_px = 0
+    height_px = 0
+    resolution = res_m if res_m is not None else 1.0
+
+    if isinstance(raster_source, (str, Path)):
+        p = Path(raster_source)
+        if p.exists():
+            with rasterio.open(p) as src:
+                width_px = src.width
+                height_px = src.height
+                if res_m is None and src.transform:
+                    resolution = abs(src.transform.a)
+        else:
+            return float(floor_m)
+    elif isinstance(raster_source, (tuple, list)) and len(raster_source) >= 2:
+        height_px, width_px = int(raster_source[0]), int(raster_source[1])
+    else:
+        return float(floor_m)
+
+    if width_px <= 0 or height_px <= 0:
+        return float(floor_m)
+
+    sorted_sizes = sorted(nice_sizes, reverse=True)
+    for size in sorted_sizes:
+        cell_px = max(1, int(round(size / resolution)))
+        nx = width_px // cell_px
+        ny = height_px // cell_px
+        if nx >= min_cells and ny >= min_cells:
+            return float(size)
+
+    return float(floor_m)
 
 
 def minmax(a):
@@ -127,7 +178,7 @@ def run_health_score(
     out_stats: Optional[str | Path] = None,
 ) -> dict:
     """
-    Computes 25m composite Forest Health Score from multi-temporal LiDAR CHMs.
+    Computes composite Forest Health Score from multi-temporal LiDAR CHMs.
     Returns {"geojson": <FeatureCollection dict>, "stats": {...}}.
     """
     chm_t1_p = Path(chm_t1_path)
@@ -146,7 +197,10 @@ def run_health_score(
         nd2 = b.nodata
 
     if h1.shape != h2.shape:
-        raise ValueError(f"shape mismatch: {h1.shape} vs {h2.shape}")
+        min_h = min(h1.shape[0], h2.shape[0])
+        min_w = min(h1.shape[1], h2.shape[1])
+        h1 = h1[:min_h, :min_w]
+        h2 = h2[:min_h, :min_w]
 
     if nd1 is not None:
         h1 = np.where(h1 == nd1, np.nan, h1)
@@ -176,6 +230,7 @@ def run_health_score(
                 "cell_id": f"{i}_{j}",
                 "score": round(s, 1) if np.isfinite(s) else None,
                 "grade": grade(s),
+                "cell_size_m": cell_m,
                 "canopy_cover": round(float(comp["cover"][i, j]), 3),
                 "structural_diversity": round(float(comp["diversity"][i, j]), 2),
                 "loss_density": round(float(comp["loss_density"][i, j]), 4),
@@ -184,6 +239,8 @@ def run_health_score(
     gdf = gpd.GeoDataFrame(rows, geometry=geoms, crs=prof["crs"])
     gdf_wgs84 = gdf.to_crs(epsg=4326) if (gdf.crs and gdf.crs.is_projected) else gdf
     geojson_dict = json.loads(gdf_wgs84.to_json())
+    geojson_dict["cell_size_m"] = cell_m
+    geojson_dict["stats"] = None  # Will be populated below
 
     stats_dict = {
         "cell_size_m": cell_m,
@@ -204,6 +261,7 @@ def run_health_score(
         },
         "sensitivity": sens,
     }
+    geojson_dict["stats"] = stats_dict
 
     if out_vector:
         out_v_path = Path(out_vector)

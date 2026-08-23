@@ -328,17 +328,19 @@ def process_uploaded_file(file: UploadFile, file_type: str = "rgb_t2") -> Dict[s
         metadata["detected_siblings"] = detected_siblings
 
         # Multi-temporal LiDAR analytics (Forest Health Score & Canopy Degradation)
-        health_grid_meta = {"generated": False, "path": None, "cell_count": None, "reason": None}
+        health_grid_meta = {"generated": False, "path": None, "cell_count": None, "cell_size_m": None, "reason": None}
         degradation_meta = {"generated": False, "path": None, "polygon_count": None, "reason": None}
 
         if chm_path and chm_t1_path:
             # 1. Forest Health Score
             try:
-                from forest_health_score import run_health_score
+                from forest_health_score import run_health_score, compute_adaptive_cell_size
+                health_cell_m = compute_adaptive_cell_size(chm_path)
                 health_out_file = job_dir / "health_grid.geojson"
                 health_res = run_health_score(
                     chm_t1_path=chm_t1_path,
                     chm_t2_path=chm_path,
+                    cell_m=health_cell_m,
                     out_vector=health_out_file,
                 )
                 cell_count = len(health_res.get("geojson", {}).get("features", []))
@@ -346,9 +348,11 @@ def process_uploaded_file(file: UploadFile, file_type: str = "rgb_t2") -> Dict[s
                     "generated": True,
                     "path": str(health_out_file.resolve()),
                     "cell_count": cell_count,
+                    "cell_size_m": health_cell_m,
+                    "stats": health_res.get("stats", {}),
                     "reason": None,
                 }
-                print(f"[health] cells={cell_count} -> {health_out_file}")
+                print(f"[health] cells={cell_count} (cell_size={health_cell_m}m) -> {health_out_file}")
             except Exception as h_err:
                 health_grid_meta["reason"] = str(h_err)
                 print(f"[health] skipped: {h_err}")
@@ -403,6 +407,8 @@ def process_uploaded_file(file: UploadFile, file_type: str = "rgb_t2") -> Dict[s
                 assessment["preview_url"] = preview_url
                 assessment["preview_bounds_wgs84"] = preview_bounds_wgs84
                 assessment["detected_siblings"] = detected_siblings
+                assessment["health_grid"] = health_grid_meta
+                assessment["degradation"] = degradation_meta
             metadata["assessment"] = assessment
         except Exception as assess_err:
             metadata["assessment_error"] = str(assess_err)

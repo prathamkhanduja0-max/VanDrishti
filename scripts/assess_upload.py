@@ -405,7 +405,7 @@ def assess_upload(
         "module": "Canopy Degradation",
         "key": "degradation",
         "level": deg_status,
-        "message": "Multi-temporal loss differencing" if deg_status == "FULL" else "Needs two acquisition dates (single epoch uploaded)",
+        "message": "Multi-temporal loss differencing" if deg_status == "FULL" else "Needs two acquisition dates (single epoch available)",
         "details": deg_cap.get("lost_capability", []),
         "note": deg_cap.get("note", "")
     })
@@ -413,11 +413,20 @@ def assess_upload(
     # 5. Forest Health Score
     health_cap = capabilities.get("health_score", {})
     health_status = health_cap.get("level", "BLOCKED")
+    health_cell_m = 25.0
+    ref_raster = chm_path or raster_path
+    if ref_raster and Path(ref_raster).exists():
+        try:
+            from forest_health_score import compute_adaptive_cell_size
+            health_cell_m = compute_adaptive_cell_size(ref_raster)
+        except Exception:
+            health_cell_m = 25.0
+    cell_size_str = f"{int(health_cell_m) if health_cell_m == int(health_cell_m) else health_cell_m} m"
     checklist.append({
         "module": "Forest Health Score",
         "key": "health_score",
         "level": health_status,
-        "message": "25m composite grid scoring" if health_status == "FULL" else "Needs multi-temporal LiDAR CHMs",
+        "message": f"{cell_size_str} composite grid" if health_status == "FULL" else "Needs multi-temporal LiDAR CHMs",
         "details": health_cap.get("lost_capability", []),
         "note": health_cap.get("note", "")
     })

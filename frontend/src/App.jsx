@@ -56,6 +56,7 @@ import { apiService } from './services/api';
 import { useAuth } from './context/AuthContext';
 import LoginPage from './components/LoginPage';
 import { DiversionAssessmentView } from './components/DiversionAssessmentView';
+import { deriveModuleStatus } from './utils/moduleStatus';
 
 
 // Custom Marker Icons for Route Stops and Entry Point
@@ -728,6 +729,11 @@ function AppDashboard({ user, logout }) {
     const gradeC = healthFeatures.filter((f) => f.properties?.grade === 'C').length;
     const gradeD = healthFeatures.filter((f) => f.properties?.grade === 'D').length;
     const totalHealthCells = healthFeatures.length;
+    const healthCellSize =
+      healthGridData?.cell_size_m ||
+      healthGridData?.stats?.cell_size_m ||
+      healthFeatures?.[0]?.properties?.cell_size_m ||
+      25;
 
     // Degradation Statistics
     const degFeatures = degradationData?.features || [];
@@ -755,6 +761,7 @@ function AppDashboard({ user, logout }) {
       routeSequence,
       highPriorityList,
       totalHealthCells,
+      healthCellSize,
       gradeA,
       gradeB,
       gradeC,
@@ -764,6 +771,38 @@ function AppDashboard({ user, logout }) {
       thinningCount,
     };
   }, [treesData, priorityData, fireHotspotsData, terrainRouteData, legacyRouteData, healthGridData, degradationData]);
+
+  // Derived Module Capabilities & Status (Single Source of Truth)
+  const moduleContext = useMemo(() => ({
+    isUploadMode,
+    uploadedAssessment,
+    activeCostSurface,
+    uploadedHealthGridData,
+    uploadedDegradationData,
+    fireHotspotsData,
+    stats,
+  }), [
+    isUploadMode,
+    uploadedAssessment,
+    activeCostSurface,
+    uploadedHealthGridData,
+    uploadedDegradationData,
+    fireHotspotsData,
+    stats,
+  ]);
+
+  const detectionStatus = useMemo(() => deriveModuleStatus('detection', moduleContext), [moduleContext]);
+  const healthStatus = useMemo(() => deriveModuleStatus('health_score', moduleContext), [moduleContext]);
+  const routingStatus = useMemo(() => deriveModuleStatus('routing', moduleContext), [moduleContext]);
+  const degradationStatus = useMemo(() => deriveModuleStatus('degradation', moduleContext), [moduleContext]);
+  const priorityStatus = useMemo(() => deriveModuleStatus('priority', moduleContext), [moduleContext]);
+  const fireModuleStatus = useMemo(() => deriveModuleStatus('fire', moduleContext), [moduleContext]);
+
+  const uploadedHealthCellSize = healthStatus.stats.cellSize;
+  const uploadedGradeA = healthStatus.stats.gradeA;
+  const uploadedGradeB = healthStatus.stats.gradeB;
+  const uploadedGradeC = healthStatus.stats.gradeC;
+  const uploadedGradeD = healthStatus.stats.gradeD;
 
   // High priority stops ordered by visiting sequence
   const orderedStops = useMemo(() => {
@@ -833,6 +872,7 @@ function AppDashboard({ user, logout }) {
         }}
         onEachFeature={(feature, layerInstance) => {
           const p = feature.properties || {};
+          const cellSize = p.cell_size_m || geoData?.cell_size_m || 25;
           layerInstance.bindPopup(`
             <div style="font-size:12px; min-width:180px;">
               <b style="font-size:13px; color:${getHealthGradeColor(p.grade)};">Cell ${p.cell_id} — Grade ${p.grade}</b><br/>
@@ -840,7 +880,7 @@ function AppDashboard({ user, logout }) {
               <b>Canopy Cover:</b> ${p.canopy_cover !== undefined ? (p.canopy_cover * 100).toFixed(1) + '%' : 'N/A'}<br/>
               <b>Structural Diversity (σ):</b> ${p.structural_diversity !== undefined ? p.structural_diversity + ' m' : 'N/A'}<br/>
               <b>Loss Density:</b> ${p.loss_density !== undefined ? (p.loss_density * 100).toFixed(2) + '%' : 'N/A'}<br/>
-              <span style="font-size:10px; color:#94a3b8;">Resolution: 25m × 25m LiDAR micro-grid</span>
+              <span style="font-size:10px; color:#94a3b8;">${cellSize} m composite grid (${cellSize}m × ${cellSize}m)</span>
             </div>
           `);
           layerInstance.on('click', () => setSelectedFeature({ type: 'health_cell', properties: p }));
@@ -1114,16 +1154,16 @@ function AppDashboard({ user, logout }) {
               <div>
                 <div className="stat-label">Detected Tree Canopies</div>
                 <div className="stat-value">
-                  {(uploadedAssessment?.detection_results?.count || 0).toLocaleString()} <span className="stat-unit">canopies</span>
+                  {detectionStatus.stats.count.toLocaleString()} <span className="stat-unit">canopies</span>
                 </div>
                 <div className="stat-sub">
                   <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>
-                    {uploadedAssessment?.detection_results?.method === 'deepforest' ? 'DeepForest RetinaNet' : 'ExG Heuristic'}
+                    {detectionStatus.stats.method}
                   </span>
                   {' • '}
-                  {typeof uploadedAssessment?.raster_info?.res_m === 'number'
-                    ? `${uploadedAssessment.raster_info.res_m} m/px`
-                    : uploadedAssessment?.raster_info?.res_m || 'Raster'}
+                  {typeof detectionStatus.stats.res_m === 'number'
+                    ? `${detectionStatus.stats.res_m} m/px`
+                    : detectionStatus.stats.res_m || 'Raster'}
                 </div>
               </div>
               <div className="stat-icon-wrap green">
@@ -1198,18 +1238,29 @@ function AppDashboard({ user, logout }) {
             <div>
               <div className="stat-label">Forest Health Score</div>
               {isUploadMode ? (
-                <>
-                  <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
-                    <span className="badge-pill blocked">[BLOCKED]</span>
-                  </div>
-                  <div className="stat-sub">
-                    No CHM / Health Grid uploaded
-                  </div>
-                </>
+                healthStatus.isAvailable ? (
+                  <>
+                    <div className="stat-value">
+                      {healthStatus.stats.cellCount} <span className="stat-unit">cells ({healthStatus.stats.cellSize} m)</span>
+                    </div>
+                    <div className="stat-sub">
+                      Grades: <span style={{ color: '#16a34a', fontWeight: 700 }}>A:{healthStatus.stats.gradeA}</span> • <span style={{ color: '#65a30d', fontWeight: 700 }}>B:{healthStatus.stats.gradeB}</span> • <span style={{ color: '#ea580c', fontWeight: 700 }}>C:{healthStatus.stats.gradeC}</span> • <span style={{ color: '#dc2626', fontWeight: 700 }}>D:{healthStatus.stats.gradeD}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
+                      <span className="badge-pill blocked">[BLOCKED]</span>
+                    </div>
+                    <div className="stat-sub">
+                      {healthStatus.reason || 'No multi-temporal CHM available'}
+                    </div>
+                  </>
+                )
               ) : (
                 <>
                   <div className="stat-value">
-                    {stats.totalHealthCells} <span className="stat-unit">cells (25m)</span>
+                    {stats.totalHealthCells} <span className="stat-unit">cells ({stats.healthCellSize || 25} m)</span>
                   </div>
                   <div className="stat-sub">
                     Grades: <span style={{ color: '#16a34a', fontWeight: 700 }}>A:{stats.gradeA}</span> • <span style={{ color: '#65a30d', fontWeight: 700 }}>B:{stats.gradeB}</span> • <span style={{ color: '#ea580c', fontWeight: 700 }}>C:{stats.gradeC}</span> • <span style={{ color: '#dc2626', fontWeight: 700 }}>D:{stats.gradeD}</span>
@@ -1227,18 +1278,20 @@ function AppDashboard({ user, logout }) {
             <div>
               <div className="stat-label">Terrain TSP Route</div>
               {isUploadMode ? (
-                hasTerrainData ? (
+                routingStatus.isAvailable ? (
                   <>
                     <div className="stat-value" style={{ fontSize: '13px', margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span className={`badge-pill ${routingLevel === 'FULL' ? 'full' : 'degraded'}`}>[{routingLevel}]</span>
+                      <span className={`badge-pill ${routingStatus.badgeClass}`}>
+                        {routingStatus.badgeLabel}
+                      </span>
                       <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--vd-deep)' }}>
-                        {routingModeLabel.toUpperCase()}
+                        {routingStatus.modeLabel.toUpperCase()}
                       </span>
                     </div>
                     <div className="stat-sub">
                       {activeCostSurface?.active_terms
                         ? `Terms: ${activeCostSurface.active_terms.join(' · ')} (${activeCostSurface.res_m || 'auto'}m)`
-                        : (hasDtm ? 'DTM slope + CHM impedance active' : 'CHM canopy impedance active')}
+                        : (routingStatus.stats.hasDtm ? 'DTM slope + CHM impedance active' : 'CHM canopy impedance active')}
                     </div>
                   </>
                 ) : (
@@ -1247,7 +1300,7 @@ function AppDashboard({ user, logout }) {
                       <span className="badge-pill blocked">[BLOCKED]</span>
                     </div>
                     <div className="stat-sub">
-                      No DTM/CHM elevation raster
+                      {routingStatus.reason || 'No DTM/CHM elevation raster'}
                     </div>
                   </>
                 )
@@ -1272,14 +1325,25 @@ function AppDashboard({ user, logout }) {
             <div>
               <div className="stat-label">Canopy Degradation</div>
               {isUploadMode ? (
-                <>
-                  <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
-                    <span className="badge-pill blocked">[BLOCKED]</span>
-                  </div>
-                  <div className="stat-sub">
-                    Needs two temporal acquisitions
-                  </div>
-                </>
+                degradationStatus.isAvailable ? (
+                  <>
+                    <div className="stat-value" style={{ color: '#856a14' }}>
+                      {degradationStatus.stats.polygonCount} <span className="stat-unit">zones</span>
+                    </div>
+                    <div className="stat-sub">
+                      <span style={{ color: '#dc2626', fontWeight: 600 }}>{degradationStatus.stats.removalCount} Removal</span> • {degradationStatus.stats.thinningCount} Thinning
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
+                      <span className="badge-pill blocked">[BLOCKED]</span>
+                    </div>
+                    <div className="stat-sub">
+                      {degradationStatus.reason || 'Needs two temporal acquisitions'}
+                    </div>
+                  </>
+                )
               ) : (
                 <>
                   <div className="stat-value" style={{ color: '#856a14' }}>
@@ -1454,21 +1518,17 @@ function AppDashboard({ user, logout }) {
                     </div>
 
                     {uploadedAssessment.checklist.map((item, idx) => {
-                      let customReason = null;
-                      if (item.key === 'health_score' && uploadedAssessment?.health_grid?.reason) {
-                        customReason = `Health grid unavailable: ${uploadedAssessment.health_grid.reason}`;
-                      } else if (item.key === 'degradation' && uploadedAssessment?.degradation?.reason) {
-                        customReason = `Degradation polygons unavailable: ${uploadedAssessment.degradation.reason}`;
-                      }
+                      const modStatus = deriveModuleStatus(item.key, moduleContext);
+                      const displayMsg = !modStatus.isAvailable ? (modStatus.reason || item.message) : item.message;
                       return (
                         <div key={idx} className="checklist-row">
                           <div className="checklist-header">
                             <span className="checklist-mod-name">{item.module}</span>
-                            <span className={`badge-pill ${item.level.toLowerCase()}`}>
-                              [{item.level}]
+                            <span className={`badge-pill ${modStatus.badgeClass}`}>
+                              {modStatus.badgeLabel}
                             </span>
                           </div>
-                          <div className="checklist-msg">{customReason || item.message}</div>
+                          <div className="checklist-msg">{displayMsg}</div>
                           {item.details?.length > 0 && (
                             <div style={{ fontSize: '9.5px', color: '#b45309', marginTop: '2px' }}>
                               {item.details.join(' • ')}
@@ -1798,24 +1858,24 @@ function AppDashboard({ user, logout }) {
                       {[
                         {
                           id: 'healthGrid',
-                          label: uploadedHealthGridData
-                            ? `Forest Health Grid (${uploadedHealthGridData.features?.length || 0})`
-                            : `Forest Health Grid (Unavailable: ${uploadedAssessment?.health_grid?.reason || 'Needs multi-temporal CHMs'})`,
+                          label: healthStatus.isAvailable
+                            ? `Forest Health Grid (${healthStatus.stats.cellCount} · ${healthStatus.stats.cellSize} m)`
+                            : `Forest Health Grid (Unavailable: ${healthStatus.reason || 'Needs multi-temporal CHMs'})`,
                           color: '#16a34a',
-                          disabled: !uploadedHealthGridData,
+                          disabled: !healthStatus.isAvailable,
                         },
                         {
                           id: 'degradation',
-                          label: uploadedDegradationData
-                            ? `Degradation Zones (${uploadedDegradationData.features?.length || 0})`
-                            : `Degradation Zones (Unavailable: ${uploadedAssessment?.degradation?.reason || 'Needs multi-temporal CHMs'})`,
+                          label: degradationStatus.isAvailable
+                            ? `Degradation Zones (${degradationStatus.stats.polygonCount})`
+                            : `Degradation Zones (Unavailable: ${degradationStatus.reason || 'Needs multi-temporal CHMs'})`,
                           color: '#991b1b',
-                          disabled: !uploadedDegradationData,
+                          disabled: !degradationStatus.isAvailable,
                         },
                         {
                           id: 'trees',
-                          label: `Detected Crowns (${uploadedAssessment?.detection_results?.count || 0})`,
-                          color: uploadedAssessment?.detection_results?.method === 'deepforest' ? '#468585' : '#80BCBD',
+                          label: `Detected Crowns (${detectionStatus.stats.count})`,
+                          color: detectionStatus.stats.method === 'DeepForest RetinaNet' ? '#468585' : '#80BCBD',
                           disabled: !uploadedAssessment?.detection_results?.geojson,
                         },
                       ].map((item) => (
@@ -1836,14 +1896,14 @@ function AppDashboard({ user, logout }) {
                     </div>
 
                     {/* Dynamic Forest Health Legend */}
-                    {layers.healthGrid && uploadedHealthGridData && (
+                    {layers.healthGrid && healthStatus.isAvailable && (
                       <div className="legend-box" style={{ marginTop: '8px', borderTop: '1px solid var(--vd-border-subtle)', paddingTop: '6px' }}>
-                        <div style={{ fontWeight: 700, color: 'var(--vd-deep)' }}>Forest Health Grades (25m):</div>
+                        <div style={{ fontWeight: 700, color: 'var(--vd-deep)' }}>Forest Health Grades ({healthStatus.stats.cellSize} m):</div>
                         <div className="legend-swatches">
-                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> A ({uploadedHealthGridData.features?.filter(f => f.properties?.grade === 'A').length || 0})</span>
-                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#84cc16' }}></span> B ({uploadedHealthGridData.features?.filter(f => f.properties?.grade === 'B').length || 0})</span>
-                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#f97316' }}></span> C ({uploadedHealthGridData.features?.filter(f => f.properties?.grade === 'C').length || 0})</span>
-                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> D ({uploadedHealthGridData.features?.filter(f => f.properties?.grade === 'D').length || 0})</span>
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> A ({healthStatus.stats.gradeA})</span>
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#84cc16' }}></span> B ({healthStatus.stats.gradeB})</span>
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#f97316' }}></span> C ({healthStatus.stats.gradeC})</span>
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> D ({healthStatus.stats.gradeD})</span>
                         </div>
                       </div>
                     )}
@@ -2371,7 +2431,7 @@ function AppDashboard({ user, logout }) {
                   {/* Dynamic Forest Health Legend */}
                   {layers.healthGrid && (
                     <div className="legend-box" style={{ marginTop: '8px', borderTop: '1px solid var(--vd-border-subtle)', paddingTop: '6px' }}>
-                      <div style={{ fontWeight: 700, color: 'var(--vd-deep)' }}>Forest Health Grades (25m):</div>
+                      <div style={{ fontWeight: 700, color: 'var(--vd-deep)' }}>Forest Health Grades ({stats.healthCellSize || 25} m):</div>
                       <div className="legend-swatches">
                         <span className="swatch-item"><span className="layer-dot" style={{ background: '#16a34a' }}></span> A ({stats.gradeA})</span>
                         <span className="swatch-item"><span className="layer-dot" style={{ background: '#65a30d' }}></span> B ({stats.gradeB})</span>
@@ -2471,59 +2531,46 @@ function AppDashboard({ user, logout }) {
                           <div className="alert-title" style={{ justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <AlertTriangle size={13} />
-                              <span>Mandatory Ground Stops</span>
+                              <span>{priorityStatus.alertTitle}</span>
                             </div>
-                            <span className="badge-pill blocked">[BLOCKED]</span>
+                            <span className={`badge-pill ${priorityStatus.badgeClass}`}>
+                              {priorityStatus.badgeLabel}
+                            </span>
                           </div>
                           <div className="alert-text">
-                            No project corridor uploaded — priority audit unavailable
+                            {priorityStatus.message}
                           </div>
                         </div>
 
                         <div className="alert-card route">
-                          {hasTerrainData ? (
-                            <>
-                              <div className="alert-title" style={{ justifyContent: 'space-between' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <Navigation size={13} />
-                                  <span>Terrain Routing ({routingModeLabel})</span>
-                                </div>
-                                <span className={`badge-pill ${routingLevel === 'FULL' ? 'full' : 'degraded'}`}>
-                                  [{routingLevel}]
-                                </span>
-                              </div>
-                              <div className="alert-text">
-                                {hasDtm
-                                  ? `Slope-aware Tobler impedance enabled with DTM (${activeCostSurface?.diagnostics?.relief_m ? `${activeCostSurface.diagnostics.relief_m.toFixed(1)}m relief` : 'elevation model'})`
-                                  : 'CHM canopy impedance active; DTM slope disabled (flat-ground baseline)'}
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="alert-title" style={{ justifyContent: 'space-between' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <Navigation size={13} />
-                                  <span>Terrain TSP</span>
-                                </div>
-                                <span className="badge-pill blocked">[BLOCKED]</span>
-                              </div>
-                              <div className="alert-text">
-                                No DTM/CHM uploaded — terrain routing unavailable
-                              </div>
-                            </>
-                          )}
+                          <div className="alert-title" style={{ justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <Navigation size={13} />
+                              <span>{routingStatus.alertTitle}</span>
+                            </div>
+                            <span className={`badge-pill ${routingStatus.badgeClass}`}>
+                              {routingStatus.badgeLabel}
+                            </span>
+                          </div>
+                          <div className="alert-text">
+                            {routingStatus.message}
+                          </div>
                         </div>
 
                         <div className="alert-card fire">
                           <div className="alert-title" style={{ justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <Scissors size={13} />
-                              <span>Canopy Loss Zones</span>
+                              <span>{degradationStatus.alertTitle}</span>
                             </div>
-                            <span className="badge-pill blocked">[BLOCKED]</span>
+                            <span className={`badge-pill ${degradationStatus.badgeClass}`}>
+                              {degradationStatus.badgeLabel}
+                            </span>
                           </div>
                           <div className="alert-text">
-                            Needs two acquisition dates (single epoch uploaded)
+                            {degradationStatus.isAvailable
+                              ? `${degradationStatus.stats.removalCount} severe removal (ΔH ≤ -5m) & ${degradationStatus.stats.thinningCount} thinning polygons via LiDAR differencing.`
+                              : degradationStatus.reason}
                           </div>
                         </div>
                       </>
@@ -2532,30 +2579,30 @@ function AppDashboard({ user, logout }) {
                         <div className="alert-card priority">
                           <div className="alert-title">
                             <AlertTriangle size={13} />
-                            <span>{stats.highPriority} Mandatory Ground Stops</span>
+                            <span>{priorityStatus.alertTitle}</span>
                           </div>
                           <div className="alert-text">
-                            All {stats.highPriority} HIGH-priority trees fall within the project corridor and require ground truth verification.
+                            {priorityStatus.message}
                           </div>
                         </div>
 
                         <div className="alert-card route">
                           <div className="alert-title">
                             <Navigation size={13} />
-                            <span>Terrain TSP: {stats.terrainDist}m ({stats.terrainTime} min)</span>
+                            <span>{routingStatus.alertTitle}</span>
                           </div>
                           <div className="alert-text">
-                            Held-Karp terrain TSP saved {stats.terrainSaved} min traversal time vs nearest-neighbor.
+                            {routingStatus.message}
                           </div>
                         </div>
 
                         <div className="alert-card fire">
                           <div className="alert-title">
                             <Scissors size={13} />
-                            <span>{stats.totalDegPolygons} Canopy Loss Zones</span>
+                            <span>{degradationStatus.alertTitle}</span>
                           </div>
                           <div className="alert-text">
-                            {stats.removalCount} severe removal (ΔH ≤ -5m) & {stats.thinningCount} thinning polygons via LiDAR differencing.
+                            {degradationStatus.message}
                           </div>
                         </div>
                       </>
