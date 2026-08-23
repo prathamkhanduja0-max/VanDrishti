@@ -8,6 +8,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+from typing import Any, Dict, Optional, Union
 import geopandas as gpd
 import numpy as np
 import rasterio
@@ -56,38 +57,26 @@ def vectorise(cls_arr, target_classes, transform, crs, min_area_m2=4.0):
     return gdf[gdf["area_m2"] >= min_area_m2].reset_index(drop=True)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default=None, help="Path to config.yaml")
-    ap.add_argument("--chm-t1", default=None, help="earlier CHM (2018)")
-    ap.add_argument("--chm-t2", default=None, help="later CHM (2019)")
-    ap.add_argument("--out-raster", default=None)
-    ap.add_argument("--out-vector", default=None)
-    ap.add_argument("--stats-out", default=None)
-    ap.add_argument("--min-area", type=float, default=None)
-    args = ap.parse_args()
+def run_degradation_chm(
+    chm_t1_path: str | Path,
+    chm_t2_path: str | Path,
+    loss_thresh: float = -5.0,
+    thinning_thresh: float = -2.0,
+    stable_band: float = 2.0,
+    min_area_m2: float = 4.0,
+    out_vector: Optional[str | Path] = None,
+    out_raster: Optional[str | Path] = None,
+    out_stats: Optional[str | Path] = None,
+) -> dict:
+    """
+    Runs multi-temporal LiDAR CHM change/loss detection.
+    Returns {"geojson": <FeatureCollection dict>, "stats": {...}}.
+    """
+    chm_t1_p = Path(chm_t1_path)
+    chm_t2_p = Path(chm_t2_path)
 
-    cfg = None
-    cfg_path = args.config or (REPO_ROOT / "config.yaml")
-    if Path(cfg_path).exists():
-        cfg = config_loader.load(cfg_path)
-        rasters = config_loader.inspect_rasters(cfg)
-        caps = config_loader.assess(rasters)
-        if caps.get("degradation", {}).get("level") == "BLOCKED" and (not args.chm_t1 or not args.chm_t2):
-            missing = ", ".join(caps["degradation"]["missing"])
-            raise RuntimeError(f"Module 'degradation' is BLOCKED due to missing required data: {missing}. Aborting.")
-
-    # Resolve inputs (CLI override > config > default)
-    chm_t1_p = args.chm_t1 or (cfg.path("site", "rasters", "chm_t1") if cfg else None)
-    chm_t2_p = args.chm_t2 or (cfg.path("site", "rasters", "chm_t2") if cfg else None)
-
-    if not chm_t1_p or not chm_t2_p:
-        raise ValueError("Both --chm-t1 and --chm-t2 must be provided via CLI or declared in config.yaml")
-
-    loss_thresh = float(cfg.get("degradation", {}).get("loss_thresh_m", -5.0)) if cfg else -5.0
-    thinning_thresh = float(cfg.get("degradation", {}).get("thinning_thresh_m", -2.0)) if cfg else -2.0
-    stable_band = float(cfg.get("degradation", {}).get("stable_band_m", 2.0)) if cfg else 2.0
-    min_area = args.min_area if args.min_area is not None else (float(cfg.get("degradation", {}).get("min_area_m2", 4.0)) if cfg else 4.0)
+    if not chm_t1_p.exists() or not chm_t2_p.exists():
+        raise FileNotFoundError(f"One or both CHM files do not exist: {chm_t1_p}, {chm_t2_p}")
 
     with rasterio.open(chm_t1_p) as a:
         h1 = a.read(1).astype(np.float64)
@@ -132,13 +121,94 @@ def main():
     stats = {
         "valid_pixels": total_valid,
         "pixel_area_m2": px_area,
-        "dh_mean_m": round(float(np.nanmean(dh)), 3),
-        "dh_median_m": round(float(np.nanmedian(dh)), 3),
-        "dh_std_m": round(float(np.nanstd(dh)), 3),
-        "h1_median_m": round(float(np.nanmedian(h1)), 2),
-        "h2_median_m": round(float(np.nanmedian(h2)), 2),
+        "dh_mean_m": round(float(np.nanmean(dh)), 3) if total_valid else None,
+        "dh_median_m": round(float(np.nanmedian(dh)), 3) if total_valid else None,
+        "dh_std_m": round(float(np.nanstd(dh)), 3) if total_valid else None,
+        "h1_median_m": round(float(np.nanmedian(h1)), 2) if total_valid else None,
+        "h2_median_m": round(float(np.nanmedian(h2)), 2) if total_valid else None,
         "classes": counts,
     }
+
+    gdf = vectorise(cls_arr, [1, 2], prof["transform"], prof["crs"], min_area_m2)
+    gdf_wgs84 = gdf.to_crs(epsg=4326) if (gdf.crs and gdf.crs.is_projected) else gdf
+    geojson_dict = json.loads(gdf_wgs84.to_json())
+
+    stats["loss_polygons"] = int(len(gdf))
+    stats["loss_polygon_area_m2"] = round(float(gdf["area_m2"].sum()), 1) if len(gdf) else 0.0
+
+    if out_vector:
+        out_v_path = Path(out_vector)
+        out_v_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_v_path, "w", encoding="utf-8") as f:
+            json.dump(geojson_dict, f)
+
+    if out_raster:
+        out_r_path = Path(out_raster)
+        out_r_path.parent.mkdir(parents=True, exist_ok=True)
+        prof.update(dtype="uint8", count=1, compress="lzw", nodata=0)
+        with rasterio.open(out_r_path, "w", **prof) as dst:
+            dst.write(cls_arr, 1)
+
+    if out_stats:
+        out_s_path = Path(out_stats)
+        out_s_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_s_path, "w", encoding="utf-8") as f:
+            json.dump(stats, f, indent=2)
+
+    return {"geojson": geojson_dict, "stats": stats}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=None, help="Path to config.yaml")
+    ap.add_argument("--chm-t1", default=None, help="earlier CHM (2018)")
+    ap.add_argument("--chm-t2", default=None, help="later CHM (2019)")
+    ap.add_argument("--out-raster", default=None)
+    ap.add_argument("--out-vector", default=None)
+    ap.add_argument("--stats-out", default=None)
+    ap.add_argument("--min-area", type=float, default=None)
+    args = ap.parse_args()
+
+    cfg = None
+    cfg_path = args.config or (REPO_ROOT / "config.yaml")
+    if Path(cfg_path).exists():
+        cfg = config_loader.load(cfg_path)
+        rasters = config_loader.inspect_rasters(cfg)
+        caps = config_loader.assess(rasters)
+        if caps.get("degradation", {}).get("level") == "BLOCKED" and (not args.chm_t1 or not args.chm_t2):
+            missing = ", ".join(caps["degradation"]["missing"])
+            raise RuntimeError(f"Module 'degradation' is BLOCKED due to missing required data: {missing}. Aborting.")
+
+    # Resolve inputs (CLI override > config > default)
+    chm_t1_p = args.chm_t1 or (cfg.path("site", "rasters", "chm_t1") if cfg else None)
+    chm_t2_p = args.chm_t2 or (cfg.path("site", "rasters", "chm_t2") if cfg else None)
+
+    if not chm_t1_p or not chm_t2_p:
+        raise ValueError("Both --chm-t1 and --chm-t2 must be provided via CLI or declared in config.yaml")
+
+    loss_thresh = float(cfg.get("degradation", {}).get("loss_thresh_m", -5.0)) if cfg else -5.0
+    thinning_thresh = float(cfg.get("degradation", {}).get("thinning_thresh_m", -2.0)) if cfg else -2.0
+    stable_band = float(cfg.get("degradation", {}).get("stable_band_m", 2.0)) if cfg else 2.0
+    min_area = args.min_area if args.min_area is not None else (float(cfg.get("degradation", {}).get("min_area_m2", 4.0)) if cfg else 4.0)
+
+    out_raster = args.out_raster or (cfg.path("outputs", "gis_dir") / "chm_change.tif" if cfg else None)
+    out_vector = args.out_vector or (cfg.path("outputs", "gis_dir") / "chm_loss_polygons.geojson" if cfg else None)
+    stats_out = args.stats_out or (cfg.path("outputs", "gis_dir") / "chm_change_stats.json" if cfg else None)
+
+    res = run_degradation_chm(
+        chm_t1_path=chm_t1_p,
+        chm_t2_path=chm_t2_p,
+        loss_thresh=loss_thresh,
+        thinning_thresh=thinning_thresh,
+        stable_band=stable_band,
+        min_area_m2=min_area,
+        out_vector=out_vector,
+        out_raster=out_raster,
+        out_stats=stats_out,
+    )
+
+    stats = res["stats"]
+    counts = stats["classes"]
 
     print("\n--- CHM change detection ---")
     print(f"  median height 2018 : {stats['h1_median_m']} m")
@@ -159,7 +229,7 @@ def main():
         print("  tile. A uniform offset like this usually means a vertical datum")
         print("  or processing difference between campaigns, not real change.")
         print("  Consider subtracting the median before classifying, and say so.")
-    if growth_px > 2 * loss_px and growth_px > 0.05 * total_valid:
+    if growth_px > 2 * loss_px and growth_px > 0.05 * stats["valid_pixels"]:
         print("  WARNING: 'growth' pixels far exceed loss pixels. Over 7 months")
         print("  that is not plausible biologically. Check co-registration")
         print("  between the two CHM campaigns before reporting either number.")
@@ -169,27 +239,11 @@ def main():
         print("  (which enforce a minimum area) rather than pixel counts.")
     print()
 
-    out_raster = args.out_raster or (cfg.path("outputs", "gis_dir") / "chm_change.tif" if cfg else None)
-    out_vector = args.out_vector or (cfg.path("outputs", "gis_dir") / "chm_loss_polygons.geojson" if cfg else None)
-    stats_out = args.stats_out or (cfg.path("outputs", "gis_dir") / "chm_change_stats.json" if cfg else None)
-
     if out_raster:
-        prof.update(dtype="uint8", count=1, compress="lzw", nodata=0)
-        with rasterio.open(out_raster, "w", **prof) as dst:
-            dst.write(cls_arr, 1)
         print(f"wrote change raster -> {out_raster}")
-
     if out_vector:
-        gdf = vectorise(cls_arr, [1, 2], prof["transform"], prof["crs"], min_area)
-        gdf.to_file(out_vector, driver="GeoJSON")
-        print(f"wrote {len(gdf)} loss polygons -> {out_vector}")
-        stats["loss_polygons"] = int(len(gdf))
-        stats["loss_polygon_area_m2"] = round(
-            float(gdf["area_m2"].sum()), 1) if len(gdf) else 0.0
-
+        print(f"wrote {stats['loss_polygons']} loss polygons -> {out_vector}")
     if stats_out:
-        with open(stats_out, "w") as f:
-            json.dump(stats, f, indent=2)
         print(f"wrote stats -> {stats_out}")
 
 

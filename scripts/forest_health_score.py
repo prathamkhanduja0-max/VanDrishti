@@ -9,6 +9,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+from typing import Any, Dict, Optional, Union
 
 import geopandas as gpd
 import numpy as np
@@ -112,6 +113,128 @@ def sensitivity(comp, base_score):
     return out
 
 
+def run_health_score(
+    chm_t1_path: str | Path,
+    chm_t2_path: str | Path,
+    cell_m: float = 25.0,
+    w_cover: float = 0.30,
+    w_diversity: float = 0.30,
+    w_degradation: float = 0.40,
+    loss_thresh: float = -5.0,
+    edge_grad_max: float = 2.0,
+    out_vector: Optional[str | Path] = None,
+    out_raster: Optional[str | Path] = None,
+    out_stats: Optional[str | Path] = None,
+) -> dict:
+    """
+    Computes 25m composite Forest Health Score from multi-temporal LiDAR CHMs.
+    Returns {"geojson": <FeatureCollection dict>, "stats": {...}}.
+    """
+    chm_t1_p = Path(chm_t1_path)
+    chm_t2_p = Path(chm_t2_path)
+
+    if not chm_t1_p.exists() or not chm_t2_p.exists():
+        raise FileNotFoundError(f"One or both CHM files do not exist: {chm_t1_p}, {chm_t2_p}")
+
+    with rasterio.open(chm_t1_p) as a:
+        h1 = a.read(1).astype(np.float64)
+        prof = a.profile.copy()
+        bounds = a.bounds
+        nd1 = a.nodata
+    with rasterio.open(chm_t2_p) as b:
+        h2 = b.read(1).astype(np.float64)
+        nd2 = b.nodata
+
+    if h1.shape != h2.shape:
+        raise ValueError(f"shape mismatch: {h1.shape} vs {h2.shape}")
+
+    if nd1 is not None:
+        h1 = np.where(h1 == nd1, np.nan, h1)
+    if nd2 is not None:
+        h2 = np.where(h2 == nd2, np.nan, h2)
+
+    res_m = abs(prof["transform"].a)
+    cell_px = max(1, int(round(cell_m / res_m)))
+
+    comp = compute_cells(h1, h2, cell_px, loss_thresh=loss_thresh, edge_grad_max=edge_grad_max)
+    score, norm_comp = score_from_components(comp, w_cover=w_cover, w_diversity=w_diversity, w_degradation=w_degradation)
+    sens = sensitivity(comp, score)
+
+    ny, nx = score.shape
+    valid_scores = score[np.isfinite(score)]
+
+    geoms, rows = [], []
+    for i in range(ny):
+        for j in range(nx):
+            minx = bounds.left + j * cell_px * res_m
+            maxy = bounds.top - i * cell_px * res_m
+            maxx = minx + cell_px * res_m
+            miny = maxy - cell_px * res_m
+            s = float(score[i, j])
+            geoms.append(box(minx, miny, maxx, maxy))
+            rows.append({
+                "cell_id": f"{i}_{j}",
+                "score": round(s, 1) if np.isfinite(s) else None,
+                "grade": grade(s),
+                "canopy_cover": round(float(comp["cover"][i, j]), 3),
+                "structural_diversity": round(float(comp["diversity"][i, j]), 2),
+                "loss_density": round(float(comp["loss_density"][i, j]), 4),
+            })
+
+    gdf = gpd.GeoDataFrame(rows, geometry=geoms, crs=prof["crs"])
+    gdf_wgs84 = gdf.to_crs(epsg=4326) if (gdf.crs and gdf.crs.is_projected) else gdf
+    geojson_dict = json.loads(gdf_wgs84.to_json())
+
+    stats_dict = {
+        "cell_size_m": cell_m,
+        "grid_shape": [ny, nx],
+        "total_cells": ny * nx,
+        "valid_cells": int(len(valid_scores)),
+        "weights": {"cover": w_cover, "diversity": w_diversity, "degradation": w_degradation},
+        "score_mean": round(float(np.mean(valid_scores)), 2) if len(valid_scores) else None,
+        "score_std": round(float(np.std(valid_scores)), 2) if len(valid_scores) else None,
+        "score_min": round(float(np.min(valid_scores)), 2) if len(valid_scores) else None,
+        "score_median": round(float(np.median(valid_scores)), 2) if len(valid_scores) else None,
+        "score_max": round(float(np.max(valid_scores)), 2) if len(valid_scores) else None,
+        "grade_counts": {
+            "A": int(sum(grade(s) == "A" for s in valid_scores)),
+            "B": int(sum(grade(s) == "B" for s in valid_scores)),
+            "C": int(sum(grade(s) == "C" for s in valid_scores)),
+            "D": int(sum(grade(s) == "D" for s in valid_scores)),
+        },
+        "sensitivity": sens,
+    }
+
+    if out_vector:
+        out_v_path = Path(out_vector)
+        out_v_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_v_path, "w", encoding="utf-8") as f:
+            json.dump(geojson_dict, f)
+
+    if out_raster:
+        out_r_path = Path(out_raster)
+        out_r_path.parent.mkdir(parents=True, exist_ok=True)
+        cell_transform = Affine(
+            res_m * cell_px, 0.0, bounds.left,
+            0.0, -res_m * cell_px, bounds.top
+        )
+        cell_prof = prof.copy()
+        cell_prof.update(
+            width=nx, height=ny, count=1, dtype="float32",
+            transform=cell_transform, nodata=-9999.0, compress="lzw"
+        )
+        with rasterio.open(out_r_path, "w", **cell_prof) as dst:
+            dst.write(np.where(np.isfinite(score), score, -9999.0).astype(np.float32), 1)
+
+    if out_stats:
+        out_s_path = Path(out_stats)
+        out_s_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_s_path, "w", encoding="utf-8") as f:
+            json.dump(stats_dict, f, indent=2)
+
+    return {"geojson": geojson_dict, "stats": stats_dict}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default=None)
@@ -147,100 +270,44 @@ def main():
     loss_thresh = float(cfg.get("degradation", {}).get("loss_thresh_m", -5.0)) if cfg else -5.0
     edge_grad_max = float(cfg.get("degradation", {}).get("edge_grad_max", 2.0)) if cfg else 2.0
 
-    with rasterio.open(chm_t1_p) as a:
-        h1 = a.read(1).astype(np.float64)
-        prof = a.profile.copy()
-        bounds = a.bounds
-        nd1 = a.nodata
-    with rasterio.open(chm_t2_p) as b:
-        h2 = b.read(1).astype(np.float64)
-        nd2 = b.nodata
-
-    if h1.shape != h2.shape:
-        raise ValueError(f"shape mismatch: {h1.shape} vs {h2.shape}")
-
-    if nd1 is not None:
-        h1 = np.where(h1 == nd1, np.nan, h1)
-    if nd2 is not None:
-        h2 = np.where(h2 == nd2, np.nan, h2)
-
-    res_m = abs(prof["transform"].a)
-    cell_px = max(1, int(round(cell_m / res_m)))
-
-    comp = compute_cells(h1, h2, cell_px, loss_thresh=loss_thresh, edge_grad_max=edge_grad_max)
-    score, norm_comp = score_from_components(comp, w_cover=w_cover, w_diversity=w_div, w_degradation=w_deg)
-    sens = sensitivity(comp, score)
-
-    ny, nx = score.shape
-    valid_scores = score[np.isfinite(score)]
-
-    print(f"\n--- Forest Health Score ({cell_m} m grid, {nx}x{ny} = {nx*ny} cells) ---")
-    print(f"  weights            : cover={w_cover:.2f} diversity={w_div:.2f} degradation={w_deg:.2f}")
-    print(f"  score mean / std   : {np.mean(valid_scores):.1f} / {np.std(valid_scores):.1f}")
-    print(f"  score min / median / max : {np.min(valid_scores):.1f} / {np.median(valid_scores):.1f} / {np.max(valid_scores):.1f}")
-    print(f"  grade counts       : "
-          f"A={sum(grade(s)=='A' for s in valid_scores)} "
-          f"B={sum(grade(s)=='B' for s in valid_scores)} "
-          f"C={sum(grade(s)=='C' for s in valid_scores)} "
-          f"D={sum(grade(s)=='D' for s in valid_scores)}")
-    print("\n  sensitivity (rank correlation with headline score):")
-    for k, v in sens.items():
-        print(f"    {k:<18}: rho = {v:+.3f}")
-    print()
-
     out_vector = args.out_vector or (cfg.path("outputs", "gis_dir") / "forest_health_grid.geojson" if cfg else None)
     out_raster = args.out_raster or (cfg.path("outputs", "gis_dir") / "forest_health_score.tif" if cfg else None)
     stats_out = args.stats_out or (cfg.path("outputs", "gis_dir") / "forest_health_stats.json" if cfg else None)
 
-    # Vector output
+    res = run_health_score(
+        chm_t1_path=chm_t1_p,
+        chm_t2_path=chm_t2_p,
+        cell_m=cell_m,
+        w_cover=w_cover,
+        w_diversity=w_div,
+        w_degradation=w_deg,
+        loss_thresh=loss_thresh,
+        edge_grad_max=edge_grad_max,
+        out_vector=out_vector,
+        out_raster=out_raster,
+        out_stats=stats_out,
+    )
+
+    stats = res["stats"]
+    print(f"\n--- Forest Health Score ({cell_m} m grid, {stats['grid_shape'][1]}x{stats['grid_shape'][0]} = {stats['total_cells']} cells) ---")
+    print(f"  weights            : cover={w_cover:.2f} diversity={w_div:.2f} degradation={w_deg:.2f}")
+    print(f"  score mean / std   : {stats['score_mean']} / {stats['score_std']}")
+    print(f"  score min / median / max : {stats['score_min']} / {stats['score_median']} / {stats['score_max']}")
+    print(f"  grade counts       : "
+          f"A={stats['grade_counts']['A']} "
+          f"B={stats['grade_counts']['B']} "
+          f"C={stats['grade_counts']['C']} "
+          f"D={stats['grade_counts']['D']}")
+    print("\n  sensitivity (rank correlation with headline score):")
+    for k, v in stats["sensitivity"].items():
+        print(f"    {k:<18}: rho = {v:+.3f}")
+    print()
+
     if out_vector:
-        geoms, rows = [], []
-        t = prof["transform"]
-        for i in range(ny):
-            for j in range(nx):
-                minx = bounds.left + j * cell_px * res_m
-                maxy = bounds.top - i * cell_px * res_m
-                maxx = minx + cell_px * res_m
-                miny = maxy - cell_px * res_m
-                s = float(score[i, j])
-                geoms.append(box(minx, miny, maxx, maxy))
-                rows.append({
-                    "cell_id": f"{i}_{j}",
-                    "score": round(s, 1) if np.isfinite(s) else None,
-                    "grade": grade(s),
-                    "canopy_cover": round(float(comp["cover"][i, j]), 3),
-                    "structural_diversity": round(float(comp["diversity"][i, j]), 2),
-                    "loss_density": round(float(comp["loss_density"][i, j]), 4),
-                })
-        gdf = gpd.GeoDataFrame(rows, geometry=geoms, crs=prof["crs"])
-        gdf.to_file(out_vector, driver="GeoJSON")
-        print(f"wrote {len(gdf)} grid cells -> {out_vector}")
-
+        print(f"wrote {len(res['geojson']['features'])} grid cells -> {out_vector}")
     if out_raster:
-        cell_transform = Affine(
-            res_m * cell_px, 0.0, bounds.left,
-            0.0, -res_m * cell_px, bounds.top
-        )
-        cell_prof = prof.copy()
-        cell_prof.update(
-            width=nx, height=ny, count=1, dtype="float32",
-            transform=cell_transform, nodata=-9999.0, compress="lzw"
-        )
-        with rasterio.open(out_raster, "w", **cell_prof) as dst:
-            dst.write(np.where(np.isfinite(score), score, -9999.0).astype(np.float32), 1)
         print(f"wrote score raster -> {out_raster}")
-
     if stats_out:
-        with open(stats_out, "w") as f:
-            json.dump({
-                "cell_size_m": cell_m,
-                "grid_shape": [ny, nx],
-                "weights": {"cover": w_cover, "diversity": w_div, "degradation": w_deg},
-                "score_mean": round(float(np.mean(valid_scores)), 2),
-                "score_std": round(float(np.std(valid_scores)), 2),
-                "score_median": round(float(np.median(valid_scores)), 2),
-                "sensitivity": sens,
-            }, f, indent=2)
         print(f"wrote stats -> {stats_out}")
 
 
