@@ -257,6 +257,8 @@ function AppDashboard({ user, logout }) {
   const [selectedUploadPreset, setSelectedUploadPreset] = useState('teak');
   const [currentSite, setCurrentSite] = useState('OSBS_large_2019');
   const [uploadedAssessment, setUploadedAssessment] = useState(null);
+  const [uploadedHealthGridData, setUploadedHealthGridData] = useState(null);
+  const [uploadedDegradationData, setUploadedDegradationData] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const isUploadMode = activeNav === 'Analyze Your Forest' && Boolean(uploadedAssessment);
   const hasDtm = Boolean(uploadedAssessment?.detected_siblings?.dtm || activeCostSurface?.active_terms?.includes('Slope'));
@@ -558,6 +560,24 @@ function AppDashboard({ user, logout }) {
       } catch (costErr) {
         console.warn('Cost surface unavailable for preset:', costErr);
       }
+
+      if (preset === 'osbs') {
+        try {
+          const [hgData, degData] = await Promise.all([
+            apiService.getHealthGrid('OSBS_large_2019'),
+            apiService.getDegradation('OSBS_large_2019'),
+          ]);
+          setUploadedHealthGridData(hgData);
+          setUploadedDegradationData(degData);
+        } catch (_) {
+          setUploadedHealthGridData(null);
+          setUploadedDegradationData(null);
+        }
+      } else {
+        // TEAK is single-epoch (2018 only) and has no multi-temporal health/degradation grids
+        setUploadedHealthGridData(null);
+        setUploadedDegradationData(null);
+      }
     } catch (e) {
       console.error('Error loading preset assessment via API:', e);
     } finally {
@@ -618,8 +638,30 @@ function AppDashboard({ user, logout }) {
       if (previewUrl) assessmentData.preview_url = previewUrl;
       if (previewBounds) assessmentData.preview_bounds_wgs84 = previewBounds;
       if (res?.id) assessmentData.upload_id = res.id;
+      if (res?.metadata?.health_grid) assessmentData.health_grid = res.metadata.health_grid;
+      if (res?.metadata?.degradation) assessmentData.degradation = res.metadata.degradation;
+      if (res?.metadata?.detected_siblings) assessmentData.detected_siblings = res.metadata.detected_siblings;
 
       setUploadedAssessment(assessmentData);
+
+      // Fetch health grid and degradation layers for the uploaded dataset
+      if (res?.id) {
+        try {
+          const [hgData, degData] = await Promise.all([
+            apiService.getHealthGrid(res.id),
+            apiService.getDegradation(res.id),
+          ]);
+          setUploadedHealthGridData(hgData);
+          setUploadedDegradationData(degData);
+        } catch (layerErr) {
+          console.warn('Health/degradation layers unavailable for upload:', layerErr);
+          setUploadedHealthGridData(null);
+          setUploadedDegradationData(null);
+        }
+      } else {
+        setUploadedHealthGridData(null);
+        setUploadedDegradationData(null);
+      }
 
       // Fetch and activate the cost surface for this upload (safely wrapped)
       if (res?.id) {
@@ -769,6 +811,86 @@ function AppDashboard({ user, logout }) {
       case 'D': return '#ef4444'; // Red
       default: return '#94a3b8';
     }
+  };
+
+  // Shared Forest Health Grid style & popup logic
+  const renderSharedHealthGrid = (geoData, paneName, prefix = '') => {
+    if (!geoData) return null;
+    const layer = (
+      <GeoJSON
+        key={`health-grid-${prefix}-${geoData.features?.length || 0}`}
+        data={geoData}
+        style={(feature) => {
+          const grade = feature.properties?.grade;
+          const fillColor = getHealthGradeColor(grade);
+          return {
+            fillColor: fillColor,
+            fillOpacity: 0.50,
+            color: '#ffffff',
+            weight: 1.0,
+            opacity: 0.8,
+          };
+        }}
+        onEachFeature={(feature, layerInstance) => {
+          const p = feature.properties || {};
+          layerInstance.bindPopup(`
+            <div style="font-size:12px; min-width:180px;">
+              <b style="font-size:13px; color:${getHealthGradeColor(p.grade)};">Cell ${p.cell_id} — Grade ${p.grade}</b><br/>
+              <b>Health Score:</b> <span style="font-weight:bold; color:#f1f5f9;">${p.score !== null && p.score !== undefined ? Number(p.score).toFixed(1) : 'N/A'} / 100</span><br/>
+              <b>Canopy Cover:</b> ${p.canopy_cover !== undefined ? (p.canopy_cover * 100).toFixed(1) + '%' : 'N/A'}<br/>
+              <b>Structural Diversity (σ):</b> ${p.structural_diversity !== undefined ? p.structural_diversity + ' m' : 'N/A'}<br/>
+              <b>Loss Density:</b> ${p.loss_density !== undefined ? (p.loss_density * 100).toFixed(2) + '%' : 'N/A'}<br/>
+              <span style="font-size:10px; color:#94a3b8;">Resolution: 25m × 25m LiDAR micro-grid</span>
+            </div>
+          `);
+          layerInstance.on('click', () => setSelectedFeature({ type: 'health_cell', properties: p }));
+        }}
+      />
+    );
+    if (paneName) {
+      return <Pane name={paneName} style={{ zIndex: 450 }}>{layer}</Pane>;
+    }
+    return layer;
+  };
+
+  // Shared Canopy Degradation Polygons style & popup logic
+  const renderSharedDegradation = (geoData, paneName, prefix = '') => {
+    if (!geoData) return null;
+    const layer = (
+      <GeoJSON
+        key={`degradation-${prefix}-${geoData.features?.length || 0}`}
+        data={geoData}
+        style={(feature) => {
+          const className = feature.properties?.class_name;
+          const isRemoval = className === 'removal' || feature.properties?.class_id === 1;
+          return {
+            fillColor: isRemoval ? '#991b1b' : '#f97316',
+            fillOpacity: 0.65,
+            color: isRemoval ? '#ef4444' : '#fdba74',
+            weight: 1.5,
+            opacity: 0.95,
+          };
+        }}
+        onEachFeature={(feature, layerInstance) => {
+          const p = feature.properties || {};
+          layerInstance.bindPopup(`
+            <div style="font-size:12px;">
+              <b style="color:${p.class_name === 'removal' ? '#ef4444' : '#fb923c'}; font-size:13px;">
+                Canopy ${p.class_name ? p.class_name.toUpperCase() : 'DEGRADATION'}
+              </b><br/>
+              <b>Impact Area:</b> ${p.area_m2} m²<br/>
+              <b>Classification:</b> ${p.class_name === 'removal' ? 'Severe Canopy Loss (ΔH ≤ -5m)' : 'Canopy Thinning (-5m < ΔH ≤ -2m)'}<br/>
+              <span style="font-size:10px; color:#94a3b8;">Multi-Temporal LiDAR Differencing</span>
+            </div>
+          `);
+          layerInstance.on('click', () => setSelectedFeature({ type: 'degradation', properties: p }));
+        }}
+      />
+    );
+    if (paneName) {
+      return <Pane name={paneName} style={{ zIndex: 460 }}>{layer}</Pane>;
+    }
+    return layer;
   };
 
   return (
@@ -1331,22 +1453,30 @@ function AppDashboard({ user, logout }) {
                       <span style={{ fontSize: '10px', color: 'var(--vd-text-muted)' }}>config_loader.assess()</span>
                     </div>
 
-                    {uploadedAssessment.checklist.map((item, idx) => (
-                      <div key={idx} className="checklist-row">
-                        <div className="checklist-header">
-                          <span className="checklist-mod-name">{item.module}</span>
-                          <span className={`badge-pill ${item.level.toLowerCase()}`}>
-                            [{item.level}]
-                          </span>
-                        </div>
-                        <div className="checklist-msg">{item.message}</div>
-                        {item.details?.length > 0 && (
-                          <div style={{ fontSize: '9.5px', color: '#b45309', marginTop: '2px' }}>
-                            {item.details.join(' • ')}
+                    {uploadedAssessment.checklist.map((item, idx) => {
+                      let customReason = null;
+                      if (item.key === 'health_score' && uploadedAssessment?.health_grid?.reason) {
+                        customReason = `Health grid unavailable: ${uploadedAssessment.health_grid.reason}`;
+                      } else if (item.key === 'degradation' && uploadedAssessment?.degradation?.reason) {
+                        customReason = `Degradation polygons unavailable: ${uploadedAssessment.degradation.reason}`;
+                      }
+                      return (
+                        <div key={idx} className="checklist-row">
+                          <div className="checklist-header">
+                            <span className="checklist-mod-name">{item.module}</span>
+                            <span className={`badge-pill ${item.level.toLowerCase()}`}>
+                              [{item.level}]
+                            </span>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          <div className="checklist-msg">{customReason || item.message}</div>
+                          {item.details?.length > 0 && (
+                            <div style={{ fontSize: '9.5px', color: '#b45309', marginTop: '2px' }}>
+                              {item.details.join(' • ')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -1551,43 +1681,51 @@ function AppDashboard({ user, logout }) {
                     />
                   )}
 
+                  {/* 1. Forest Health Grid on Upload Map (Z-Index 450) */}
+                  {layers.healthGrid && renderSharedHealthGrid(uploadedHealthGridData, 'uploadHealthGridPane', `upload-${selectedUploadPreset}`)}
+
+                  {/* 2. Canopy Degradation Polygons on Upload Map (Z-Index 460) */}
+                  {layers.degradation && renderSharedDegradation(uploadedDegradationData, 'uploadDegradationPane', `upload-${selectedUploadPreset}`)}
+
                   {/* Fit map viewport to uploaded raster bounds */}
                   {uploadedAssessment?.preview_bounds_wgs84 && (
                     <MapBoundsFitter bounds={uploadedAssessment.preview_bounds_wgs84} />
                   )}
 
-                  {/* Render Detected Crowns */}
-                  {uploadedAssessment?.detection_results?.geojson && (
-                    <GeoJSON
-                      key={`upload-trees-${selectedUploadPreset}-${uploadedAssessment?.detection_results?.method}`}
-                      data={uploadedAssessment.detection_results.geojson}
-                      pointToLayer={(feature, latlng) => {
-                        const isDf = uploadedAssessment?.detection_results?.method === 'deepforest' || feature.properties?.score !== undefined;
-                        return L.circleMarker(latlng, {
-                          radius: isDf ? 5.0 : 4.5,
-                          fillColor: isDf ? '#468585' : '#80BCBD',
-                          color: '#ffffff',
-                          weight: 1.2,
-                          fillOpacity: 0.9,
-                        });
-                      }}
-                      onEachFeature={(feature, layer) => {
-                        const p = feature.properties || {};
-                        const method = uploadedAssessment?.detection_results?.method;
-                        const isDeepForest = method === 'deepforest' || p.score !== undefined;
-                        const val = p.score !== undefined ? p.score : (p.exg_strength !== undefined ? p.exg_strength : p.confidence);
-                        const label = isDeepForest ? 'AI Score (RetinaNet)' : (p.exg_strength !== undefined ? 'ExG Strength' : 'Confidence');
-                        layer.bindPopup(`
-                          <div style="font-size:12px; color: #1f4747;">
-                            <b style="color:#468585;">Detected Tree Crown #${p.tree_id}</b><br/>
-                            <b>${label}:</b> ${val !== undefined ? (val * 100).toFixed(1) + '%' : 'N/A'}<br/>
-                            ${p.crown_diam_m !== undefined ? `<b>Crown Diameter:</b> ${p.crown_diam_m} m<br/>` : ''}
-                            <b>Pixel Coordinates:</b> [${p.pixel_x}, ${p.pixel_y}]<br/>
-                            <span style="font-size:10px; color:#6b9494;">${isDeepForest ? 'DeepForest (NEON-pretrained RetinaNet)' : 'Single-Raster Optical Crown Preview'}</span>
-                          </div>
-                        `);
-                      }}
-                    />
+                  {/* 3. Render Detected Crowns (Z-Index 500) */}
+                  {layers.trees && uploadedAssessment?.detection_results?.geojson && (
+                    <Pane name="uploadCrownsPane" style={{ zIndex: 500 }}>
+                      <GeoJSON
+                        key={`upload-trees-${selectedUploadPreset}-${uploadedAssessment?.detection_results?.method}`}
+                        data={uploadedAssessment.detection_results.geojson}
+                        pointToLayer={(feature, latlng) => {
+                          const isDf = uploadedAssessment?.detection_results?.method === 'deepforest' || feature.properties?.score !== undefined;
+                          return L.circleMarker(latlng, {
+                            radius: isDf ? 5.0 : 4.5,
+                            fillColor: isDf ? '#468585' : '#80BCBD',
+                            color: '#ffffff',
+                            weight: 1.2,
+                            fillOpacity: 0.9,
+                          });
+                        }}
+                        onEachFeature={(feature, layer) => {
+                          const p = feature.properties || {};
+                          const method = uploadedAssessment?.detection_results?.method;
+                          const isDeepForest = method === 'deepforest' || p.score !== undefined;
+                          const val = p.score !== undefined ? p.score : (p.exg_strength !== undefined ? p.exg_strength : p.confidence);
+                          const label = isDeepForest ? 'AI Score (RetinaNet)' : (p.exg_strength !== undefined ? 'ExG Strength' : 'Confidence');
+                          layer.bindPopup(`
+                            <div style="font-size:12px; color: #1f4747;">
+                              <b style="color:#468585;">Detected Tree Crown #${p.tree_id}</b><br/>
+                              <b>${label}:</b> ${val !== undefined ? (val * 100).toFixed(1) + '%' : 'N/A'}<br/>
+                              ${p.crown_diam_m !== undefined ? `<b>Crown Diameter:</b> ${p.crown_diam_m} m<br/>` : ''}
+                              <b>Pixel Coordinates:</b> [${p.pixel_x}, ${p.pixel_y}]<br/>
+                              <span style="font-size:10px; color:#6b9494;">${isDeepForest ? 'DeepForest (NEON-pretrained RetinaNet)' : 'Single-Raster Optical Crown Preview'}</span>
+                            </div>
+                          `);
+                        }}
+                      />
+                    </Pane>
                   )}
 
                   {/* P2P Dijkstra Start Marker (A) */}
@@ -1638,6 +1776,89 @@ function AppDashboard({ user, logout }) {
                     </Pane>
                   )}
                 </MapContainer>
+
+                {/* FLOATING LAYER TOGGLES & DYNAMIC LEGEND (UPLOAD MODE) */}
+                {layersOpen ? (
+                  <div className="layer-panel">
+                    <div className="layer-panel-header">
+                      <div className="layer-panel-title">
+                        <Layers size={14} style={{ color: 'var(--vd-deep)' }} />
+                        <span>Map Layers</span>
+                      </div>
+                      <button
+                        onClick={() => setLayersOpen(false)}
+                        className="layer-collapse-btn"
+                        title="Collapse Layer Panel"
+                      >
+                        <ChevronUp size={14} />
+                      </button>
+                    </div>
+
+                    <div>
+                      {[
+                        {
+                          id: 'healthGrid',
+                          label: uploadedHealthGridData
+                            ? `Forest Health Grid (${uploadedHealthGridData.features?.length || 0})`
+                            : `Forest Health Grid (Unavailable: ${uploadedAssessment?.health_grid?.reason || 'Needs multi-temporal CHMs'})`,
+                          color: '#16a34a',
+                          disabled: !uploadedHealthGridData,
+                        },
+                        {
+                          id: 'degradation',
+                          label: uploadedDegradationData
+                            ? `Degradation Zones (${uploadedDegradationData.features?.length || 0})`
+                            : `Degradation Zones (Unavailable: ${uploadedAssessment?.degradation?.reason || 'Needs multi-temporal CHMs'})`,
+                          color: '#991b1b',
+                          disabled: !uploadedDegradationData,
+                        },
+                        {
+                          id: 'trees',
+                          label: `Detected Crowns (${uploadedAssessment?.detection_results?.count || 0})`,
+                          color: uploadedAssessment?.detection_results?.method === 'deepforest' ? '#468585' : '#80BCBD',
+                          disabled: !uploadedAssessment?.detection_results?.geojson,
+                        },
+                      ].map((item) => (
+                        <label key={item.id} className={`layer-item ${item.disabled ? 'disabled' : ''}`} style={item.disabled ? { opacity: 0.7 } : {}}>
+                          <div className="layer-left">
+                            <input
+                              type="checkbox"
+                              checked={layers[item.id] && !item.disabled}
+                              disabled={item.disabled}
+                              onChange={() => toggleLayer(item.id)}
+                              style={{ cursor: item.disabled ? 'not-allowed' : 'pointer' }}
+                            />
+                            <span style={{ fontSize: '11px', color: item.disabled ? 'var(--vd-text-muted)' : 'inherit' }}>{item.label}</span>
+                          </div>
+                          <span className="layer-dot" style={{ backgroundColor: item.color }}></span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {/* Dynamic Forest Health Legend */}
+                    {layers.healthGrid && uploadedHealthGridData && (
+                      <div className="legend-box" style={{ marginTop: '8px', borderTop: '1px solid var(--vd-border-subtle)', paddingTop: '6px' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--vd-deep)' }}>Forest Health Grades (25m):</div>
+                        <div className="legend-swatches">
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> A ({uploadedHealthGridData.features?.filter(f => f.properties?.grade === 'A').length || 0})</span>
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#84cc16' }}></span> B ({uploadedHealthGridData.features?.filter(f => f.properties?.grade === 'B').length || 0})</span>
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#f97316' }}></span> C ({uploadedHealthGridData.features?.filter(f => f.properties?.grade === 'C').length || 0})</span>
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> D ({uploadedHealthGridData.features?.filter(f => f.properties?.grade === 'D').length || 0})</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setLayersOpen(true)}
+                    className="layer-panel-collapsed-btn"
+                    title="Expand Map Layers Control"
+                  >
+                    <Layers size={14} style={{ color: 'var(--vd-deep)' }} />
+                    <span>Layers</span>
+                    <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />
+                  </button>
+                )}
               </div>
             </div>
           ) : activeNav === 'Canopy Mask' ? (
@@ -1823,70 +2044,10 @@ function AppDashboard({ user, logout }) {
                 )}
 
                 {/* 1. FOREST HEALTH GRID (CHOROPLETH BY GRADE) */}
-                {layers.healthGrid && healthGridData && (
-                  <GeoJSON
-                    key="health-grid-layer"
-                    data={healthGridData}
-                    style={(feature) => {
-                      const grade = feature.properties?.grade;
-                      const fillColor = getHealthGradeColor(grade);
-                      return {
-                        fillColor: fillColor,
-                        fillOpacity: 0.50,
-                        color: '#ffffff',
-                        weight: 1.0,
-                        opacity: 0.8,
-                      };
-                    }}
-                    onEachFeature={(feature, layer) => {
-                      const p = feature.properties || {};
-                      layer.bindPopup(`
-                        <div style="font-size:12px; min-width:180px;">
-                          <b style="font-size:13px; color:${getHealthGradeColor(p.grade)};">Cell ${p.cell_id} — Grade ${p.grade}</b><br/>
-                          <b>Health Score:</b> <span style="font-weight:bold; color:#f1f5f9;">${p.score !== null && p.score !== undefined ? Number(p.score).toFixed(1) : 'N/A'} / 100</span><br/>
-                          <b>Canopy Cover:</b> ${p.canopy_cover !== undefined ? (p.canopy_cover * 100).toFixed(1) + '%' : 'N/A'}<br/>
-                          <b>Structural Diversity (σ):</b> ${p.structural_diversity !== undefined ? p.structural_diversity + ' m' : 'N/A'}<br/>
-                          <b>Loss Density:</b> ${p.loss_density !== undefined ? (p.loss_density * 100).toFixed(2) + '%' : 'N/A'}<br/>
-                          <span style="font-size:10px; color:#94a3b8;">Resolution: 25m × 25m LiDAR micro-grid</span>
-                        </div>
-                      `);
-                      layer.on('click', () => setSelectedFeature({ type: 'health_cell', properties: p }));
-                    }}
-                  />
-                )}
+                {layers.healthGrid && renderSharedHealthGrid(healthGridData, 'demoHealthGridPane', 'demo')}
 
                 {/* 2. CANOPY DEGRADATION POLYGONS */}
-                {layers.degradation && degradationData && (
-                  <GeoJSON
-                    key="degradation-polygons-layer"
-                    data={degradationData}
-                    style={(feature) => {
-                      const className = feature.properties?.class_name;
-                      const isRemoval = className === 'removal' || feature.properties?.class_id === 1;
-                      return {
-                        fillColor: isRemoval ? '#991b1b' : '#f97316',
-                        fillOpacity: 0.65,
-                        color: isRemoval ? '#ef4444' : '#fdba74',
-                        weight: 1.5,
-                        opacity: 0.95,
-                      };
-                    }}
-                    onEachFeature={(feature, layer) => {
-                      const p = feature.properties || {};
-                      layer.bindPopup(`
-                        <div style="font-size:12px;">
-                          <b style="color:${p.class_name === 'removal' ? '#ef4444' : '#fb923c'}; font-size:13px;">
-                            Canopy ${p.class_name ? p.class_name.toUpperCase() : 'DEGRADATION'}
-                          </b><br/>
-                          <b>Impact Area:</b> ${p.area_m2} m²<br/>
-                          <b>Classification:</b> ${p.class_name === 'removal' ? 'Severe Canopy Loss (ΔH ≤ -5m)' : 'Canopy Thinning (-5m < ΔH ≤ -2m)'}<br/>
-                          <span style="font-size:10px; color:#94a3b8;">Multi-Temporal LiDAR Differencing</span>
-                        </div>
-                      `);
-                      layer.on('click', () => setSelectedFeature({ type: 'degradation', properties: p }));
-                    }}
-                  />
-                )}
+                {layers.degradation && renderSharedDegradation(degradationData, 'demoDegradationPane', 'demo')}
 
                 {/* 3. PROJECT BOUNDARY LAYER */}
                 {layers.boundary && boundaryData && (

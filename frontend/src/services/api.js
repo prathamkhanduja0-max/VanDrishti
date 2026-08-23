@@ -27,6 +27,8 @@ async function fetchWithFallback(apiUrl, fallbackUrl) {
   return null;
 }
 
+const OSBS_DEMO_SITES = new Set(['OSBS_large_2019', 'osbs']);
+
 export const apiService = {
   // GIS Layers
   getBoundary: (site = 'OSBS_large_2019') =>
@@ -44,11 +46,15 @@ export const apiService = {
   getLegacyRoute: (site = 'OSBS_large_2019') =>
     fetchWithFallback(`${API_BASE}/gis/route?site=${site}&route_type=legacy`, `/data/${site}_field_route_lcp_optimized.geojson`),
 
-  getHealthGrid: (site = 'OSBS_large_2019') =>
-    fetchWithFallback(`${API_BASE}/gis/health-grid?site=${site}`, '/data/forest_health_grid.geojson'),
+  getHealthGrid: (site = 'OSBS_large_2019') => {
+    const fallback = OSBS_DEMO_SITES.has(site) ? '/data/forest_health_grid.geojson' : null;
+    return fetchWithFallback(`${API_BASE}/gis/health-grid?site=${site}`, fallback);
+  },
 
-  getDegradation: (site = 'OSBS_large_2019') =>
-    fetchWithFallback(`${API_BASE}/gis/degradation?site=${site}`, '/data/chm_loss_polygons.geojson'),
+  getDegradation: (site = 'OSBS_large_2019') => {
+    const fallback = OSBS_DEMO_SITES.has(site) ? '/data/chm_loss_polygons.geojson' : null;
+    return fetchWithFallback(`${API_BASE}/gis/degradation?site=${site}`, fallback);
+  },
 
   getFireHotspots: async (preset = 'osbs_live') => {
     try {
