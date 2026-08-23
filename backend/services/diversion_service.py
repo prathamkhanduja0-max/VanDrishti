@@ -178,9 +178,10 @@ def get_diversion_assessment(site_name: str = "OSBS_large_2019") -> Dict[str, An
             "freshness": "Multi-Temporal LiDAR CHM (2018 vs 2019)"
         },
         "fire_monitoring": {
-            "status": "LIVE_REAL_TIME" if fire_data.get("source", "").startswith("VIIRS") or fire_data.get("source", "").startswith("NASA") else "UNAVAILABLE",
+            "status": "LIVE_REAL_TIME" if fire_data.get("status") == "AVAILABLE" else "UNAVAILABLE",
             "source": fire_data.get("source", "NASA FIRMS VIIRS 375m"),
-            "freshness": site_ctx["acquisition_dates"]["fire"]
+            "freshness": site_ctx["acquisition_dates"]["fire"] if fire_data.get("status") == "AVAILABLE" else "N/A (API Unreachable)",
+            "reason": fire_data.get("reason")
         },
         "field_routing": {
             "status": "AVAILABLE" if route_dist > 0 else "UNAVAILABLE",
