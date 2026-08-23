@@ -54,7 +54,7 @@ def fetch_firms_hotspots(config, map_key):
     Handles network errors and empty responses gracefully.
     """
     west, south, east, north = config["bbox"]
-    day_range = config["day_range"]
+    day_range = min(max(1, int(config.get("day_range", 5))), 5)
     source = config["source"]
     query_date = config["query_date"]
 
@@ -75,12 +75,19 @@ def fetch_firms_hotspots(config, map_key):
             df = pd.read_csv(io.StringIO(text))
             print(f"NASA FIRMS API Response: HTTP {status} OK ({len(df)} hotspot rows received)")
             return df, "API_SUCCESS"
+        elif status == 200:
+            # 200 with zero records (header only or empty)
+            if "latitude" not in text.lower() and len(text) < 20:
+                print(f"NASA FIRMS API Response: HTTP {status} OK (0 hotspots in area)")
+                return pd.DataFrame(), "API_SUCCESS"
+            df = pd.read_csv(io.StringIO(text))
+            return df, "API_SUCCESS"
         elif "Invalid MAP_KEY" in text or status in (400, 401, 403):
             print(f"NASA FIRMS API: {text} (HTTP {status})")
-            return None, f"AUTH_OR_REQUEST_ERROR: {text}"
+            return None, f"AUTH_OR_REQUEST_ERROR: {text} (HTTP {status})"
         else:
             print(f"NASA FIRMS API Response: HTTP {status} | {text[:120]}")
-            return None, f"HTTP_{status}"
+            return None, f"HTTP_{status}: {text[:100]}"
 
     except requests.exceptions.RequestException as e:
         print(f"Network error communicating with NASA FIRMS API: {e}")
@@ -94,6 +101,7 @@ def run_fire_detection(preset_key=ACTIVE_PRESET):
     cfg = PRESETS[preset_key]
     aoi_name = cfg["aoi_name"]
     west, south, east, north = cfg["bbox"]
+    cfg["day_range"] = min(max(1, int(cfg.get("day_range", 5))), 5)
     query_date_str = cfg["query_date"] if cfg["query_date"] else "Latest (Live Rolling Window)"
 
     project_root = Path(__file__).resolve().parent.parent
@@ -114,6 +122,11 @@ def run_fire_detection(preset_key=ACTIVE_PRESET):
 
     # 1. Fetch FIRMS Data
     df_raw, status_msg = fetch_firms_hotspots(cfg, MAP_KEY)
+
+    if status_msg != "API_SUCCESS" or df_raw is None:
+        print(f"\n[!] NASA FIRMS query failed: {status_msg}")
+        print("    Preserving existing GeoJSON/map outputs (NOT overwriting).")
+        raise RuntimeError(f"NASA FIRMS API query failed: {status_msg}")
 
     # 2. Process Data
     records = []
