@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/upload", tags=["Uploads"])
 
 
 @router.post("", response_model=UploadResponse, summary="Upload RGB/LiDAR raster or boundary GeoJSON")
-async def upload_file(
+def upload_file(
     file: UploadFile = File(..., description="Raster (.tif) or vector (.geojson, .shp) dataset"),
     file_type: str = Form("rgb_t2", description="Role: 'rgb_t2', 'rgb_t1', 'chm_t2', 'chm_t1', 'dtm', 'boundary'"),
 ):
@@ -25,11 +25,11 @@ async def upload_file(
 
 
 @router.get("/list", response_model=List[UploadResponse], summary="List uploaded datasets and their metadata")
-async def get_uploaded_files():
+def get_uploaded_files():
     return list_uploads()
 
 @router.get("/{upload_id}/cost-surface", summary="Get or generate routable cost surface for uploaded raster")
-async def get_cost_surface(upload_id: str):
+def get_cost_surface(upload_id: str):
     from backend.services.upload_service import get_upload_cost_surface
     cs = get_upload_cost_surface(upload_id)
     if not cs:
@@ -38,7 +38,7 @@ async def get_cost_surface(upload_id: str):
 
 
 @router.get("/{upload_id}/preview", summary="Get web preview image (PNG) for uploaded raster")
-async def get_upload_preview(upload_id: str):
+def get_upload_preview(upload_id: str):
     from fastapi.responses import FileResponse
     from backend.services.upload_service import get_upload_preview_path
 
@@ -49,7 +49,7 @@ async def get_upload_preview(upload_id: str):
 
 
 @router.get("/{upload_id}/report", summary="Generate and download assessment report (PDF/CSV) for uploaded dataset")
-async def get_upload_report(upload_id: str, format: str = "pdf"):
+def get_upload_report(upload_id: str, format: str = "pdf"):
     from fastapi.responses import FileResponse
     from backend.services.upload_service import generate_upload_report_file
 

@@ -60,13 +60,27 @@ def get_diversion_assessment(site_name: str = "OSBS_large_2019") -> Dict[str, An
         # Live NASA FIRMS Query
         try:
             fire_preset = "osbs_live" if not is_teak else "teak"
-            fire_resp = query_firms_hotspots(preset=fire_preset, day_range=7)
+            fire_resp = query_firms_hotspots(preset=fire_preset, day_range=5)
+            if fire_resp.get("status") == "UNAVAILABLE" or fire_resp.get("hotspot_count") is None:
+                fire_data = {
+                    "status": "UNAVAILABLE",
+                    "reason": fire_resp.get("reason") or "NASA FIRMS API unreachable",
+                    "hotspot_count": fire_resp.get("hotspot_count"),
+                    "source": fire_resp.get("source", "UNAVAILABLE")
+                }
+            else:
+                fire_data = {
+                    "status": fire_resp.get("status", "AVAILABLE"),
+                    "hotspot_count": fire_resp.get("hotspot_count", 0),
+                    "source": fire_resp.get("source", "NASA_FIRMS_VIIRS_NRT")
+                }
+        except Exception as e:
             fire_data = {
-                "hotspot_count": fire_resp.get("hotspot_count", 0),
-                "source": fire_resp.get("source", "NASA_FIRMS_VIIRS_NRT")
+                "status": "UNAVAILABLE",
+                "reason": f"NASA FIRMS API unreachable: {str(e)}",
+                "hotspot_count": None,
+                "source": "UNAVAILABLE"
             }
-        except Exception:
-            fire_data = {"hotspot_count": 0, "source": "UNAVAILABLE (FIRMS API Unreachable)"}
 
     # 2. Boundary & Corridor Metrics
     boundary_feats = boundary_data.get("features", [])

@@ -198,7 +198,9 @@ export function DiversionAssessmentView({ currentSite = 'OSBS_large_2019' }) {
             <div className="prov-tile">
               <div className="prov-label">NASA FIRMS Thermal Fire</div>
               <div className="prov-value">{provenance.fire_monitoring?.source}</div>
-              <div className="prov-tag live">{provenance.fire_monitoring?.freshness}</div>
+              <div className={`prov-tag ${provenance.fire_monitoring?.status === 'LIVE_REAL_TIME' ? 'live' : 'blocked'}`}>
+                {provenance.fire_monitoring?.status === 'LIVE_REAL_TIME' ? provenance.fire_monitoring?.freshness : (provenance.fire_monitoring?.reason || 'UNAVAILABLE')}
+              </div>
             </div>
           </div>
         </div>
@@ -379,9 +381,19 @@ export function DiversionAssessmentView({ currentSite = 'OSBS_large_2019' }) {
               </tr>
               <tr>
                 <td><b>NASA FIRMS Thermal Fire</b></td>
-                <td><b>{summary.fire_hotspots_count} active hotspots</b></td>
-                <td><span className="prov-tag live">{provenance.fire_monitoring?.status || 'LIVE_REAL_TIME'}</span></td>
-                <td>{provenance.fire_monitoring?.source} ({provenance.fire_monitoring?.freshness})</td>
+                <td>
+                  {summary.fire_hotspots_count !== null && summary.fire_hotspots_count !== undefined ? (
+                    <b>{summary.fire_hotspots_count} active hotspots</b>
+                  ) : (
+                    <span className="badge-pill blocked">[UNAVAILABLE]</span>
+                  )}
+                </td>
+                <td>
+                  <span className={`prov-tag ${capabilities.fire === 'FULL' ? 'live' : 'blocked'}`}>
+                    {capabilities.fire || 'UNAVAILABLE'}
+                  </span>
+                </td>
+                <td>{provenance.fire_monitoring?.source} {provenance.fire_monitoring?.reason ? `(${provenance.fire_monitoring.reason})` : (provenance.fire_monitoring?.freshness ? `(${provenance.fire_monitoring.freshness})` : '')}</td>
               </tr>
             </tbody>
           </table>

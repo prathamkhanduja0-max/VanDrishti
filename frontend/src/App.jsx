@@ -258,6 +258,7 @@ function AppDashboard({ user, logout }) {
   const [currentSite, setCurrentSite] = useState('OSBS_large_2019');
   const [uploadedAssessment, setUploadedAssessment] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const isUploadMode = activeNav === 'Analyze Your Forest' && Boolean(uploadedAssessment);
 
   const triggerDownload = (url) => {
     const a = document.createElement('a');
@@ -658,7 +659,9 @@ function AppDashboard({ user, logout }) {
     const lowPriority = priorityData?.features?.filter((f) => f.properties?.verification_priority === 'LOW')?.length || 0;
     const operationalInventory = priorityData?.features?.length || (highPriority + mediumPriority + lowPriority);
 
-    const fireCount = fireHotspotsData?.features?.length || 0;
+    const fireStatus = fireHotspotsData?.status || (fireHotspotsData?.features ? 'AVAILABLE' : 'UNAVAILABLE');
+    const fireReason = fireHotspotsData?.reason || (fireStatus === 'UNAVAILABLE' ? 'NASA FIRMS API unreachable' : null);
+    const fireCount = fireStatus === 'UNAVAILABLE' ? null : (fireHotspotsData?.features?.length ?? null);
 
     // Terrain Route Statistics
     const terrainProps = terrainRouteData?.features?.[0]?.properties || {};
@@ -696,6 +699,8 @@ function AppDashboard({ user, logout }) {
       mediumPriority,
       lowPriority,
       fireCount,
+      fireStatus,
+      fireReason,
       terrainDist: terrainDist.toFixed(1),
       terrainTime: terrainTime.toFixed(2),
       terrainSaved: terrainSaved.toFixed(2),
@@ -816,10 +821,16 @@ function AppDashboard({ user, logout }) {
           <div className="scope-badge-card">
             <div className="scope-badge-title">
               <Sparkles size={13} />
-              <span>OSBS Study Area</span>
+              <span>{isUploadMode ? (uploadedAssessment?.raster_info?.filename || 'Uploaded Dataset') : 'OSBS Study Area'}</span>
             </div>
             <div className="scope-badge-desc">
-              250m × 250m (6.25 ha, NEON LiDAR & AOP)
+              {isUploadMode ? (
+                uploadedAssessment?.raster_info?.shape
+                  ? `${uploadedAssessment.raster_info.shape[1]}×${uploadedAssessment.raster_info.shape[0]} px (${typeof uploadedAssessment.raster_info.area_ha === 'number' ? uploadedAssessment.raster_info.area_ha + ' ha' : uploadedAssessment.raster_info.area_ha})`
+                  : 'Custom Raster Extent'
+              ) : (
+                '250m × 250m (6.25 ha, NEON LiDAR & AOP)'
+              )}
             </div>
           </div>
 
@@ -827,15 +838,15 @@ function AppDashboard({ user, logout }) {
           <nav className="nav-list">
             {[
               { id: 'Overview', icon: Layers, label: 'Overview' },
-              { id: 'Forest Health', icon: Activity, label: `Forest Health (${stats.totalHealthCells} Cells)` },
-              { id: 'Degradation', icon: Scissors, label: `Degradation (${stats.totalDegPolygons} Polygons)` },
-              { id: 'Terrain Route', icon: Navigation, label: `Terrain Route (${stats.terrainDist}m)` },
-              { id: 'Validated Trees', icon: Compass, label: `Validated Trees (${stats.totalTrees})` },
-              { id: 'Priority Audit', icon: AlertTriangle, label: `Priority Audit (${stats.highPriority} High)` },
+              { id: 'Forest Health', icon: Activity, label: isUploadMode ? 'Forest Health' : `Forest Health (${stats.totalHealthCells} Cells)` },
+              { id: 'Degradation', icon: Scissors, label: isUploadMode ? 'Degradation' : `Degradation (${stats.totalDegPolygons} Polygons)` },
+              { id: 'Terrain Route', icon: Navigation, label: isUploadMode ? 'Terrain Route' : `Terrain Route (${stats.terrainDist}m)` },
+              { id: 'Validated Trees', icon: Compass, label: isUploadMode ? 'Validated Trees' : `Validated Trees (${stats.totalTrees})` },
+              { id: 'Priority Audit', icon: AlertTriangle, label: isUploadMode ? 'Priority Audit' : `Priority Audit (${stats.highPriority} High)` },
               { id: 'Diversion Assessment', icon: ShieldCheck, label: 'Diversion Assessment' },
               { id: 'Analyze Your Forest', icon: UploadCloud, label: 'Analyze Your Forest' },
               { id: 'Canopy Mask', icon: Eye, label: 'Canopy & Route View' },
-              { id: 'Fire Risk', icon: Flame, label: `Fire Risk (${stats.fireCount})` },
+              { id: 'Fire Risk', icon: Flame, label: isUploadMode ? 'Fire Risk' : (stats.fireStatus === 'UNAVAILABLE' ? 'Fire Risk (Unavailable)' : `Fire Risk (${stats.fireCount ?? 0})`) },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeNav === item.id;
@@ -896,7 +907,15 @@ function AppDashboard({ user, logout }) {
           <div className="topbar-title-wrap">
             <h2>
               <span>VanDrishti</span>
-              <span className="prototype-tag">250m × 250m (6.25 ha)</span>
+              <span className="prototype-tag">
+                {isUploadMode ? (
+                  uploadedAssessment?.raster_info?.shape
+                    ? `${uploadedAssessment.raster_info.shape[1]}×${uploadedAssessment.raster_info.shape[0]} px (${typeof uploadedAssessment.raster_info.area_ha === 'number' ? uploadedAssessment.raster_info.area_ha + ' ha' : uploadedAssessment.raster_info.area_ha})`
+                    : 'Uploaded Area'
+                ) : (
+                  '250m × 250m (6.25 ha)'
+                )}
+              </span>
             </h2>
           </div>
 
@@ -963,77 +982,113 @@ function AppDashboard({ user, logout }) {
         {/* TOP STAT CARDS (REAL COMPUTED DATA ONLY) */}
         <div className="stats-grid">
           {/* Card 1: Tree Inventory Transparency & Pipeline Funnel */}
-          <div className="stat-card" style={{ flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+          {isUploadMode ? (
+            <div className="stat-card">
               <div>
-                <div className="stat-label">Tree Inventory & Audit Funnel</div>
-                <div className="stat-value" style={{ fontSize: '20px', display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span>{stats.operationalInventory.toLocaleString()}</span>
-                  <span className="stat-unit" style={{ fontSize: '11px', color: '#94a3b8' }}>Operational Inventory</span>
+                <div className="stat-label">Detected Tree Canopies</div>
+                <div className="stat-value">
+                  {(uploadedAssessment?.detection_results?.count || 0).toLocaleString()} <span className="stat-unit">canopies</span>
                 </div>
                 <div className="stat-sub">
-                  <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>{stats.insideTrees} in Corridor</span> • {stats.outsideTrees} Outside
+                  <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>
+                    {uploadedAssessment?.detection_results?.method === 'deepforest' ? 'DeepForest RetinaNet' : 'ExG Heuristic'}
+                  </span>
+                  {' • '}
+                  {typeof uploadedAssessment?.raster_info?.res_m === 'number'
+                    ? `${uploadedAssessment.raster_info.res_m} m/px`
+                    : uploadedAssessment?.raster_info?.res_m || 'Raster'}
                 </div>
               </div>
               <div className="stat-icon-wrap green">
                 <Trees size={18} />
               </div>
             </div>
+          ) : (
+            <div className="stat-card" style={{ flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+                <div>
+                  <div className="stat-label">Tree Inventory & Audit Funnel</div>
+                  <div className="stat-value" style={{ fontSize: '20px', display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                    <span>{stats.operationalInventory.toLocaleString()}</span>
+                    <span className="stat-unit" style={{ fontSize: '11px', color: '#94a3b8' }}>Operational Inventory</span>
+                  </div>
+                  <div className="stat-sub">
+                    <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>{stats.insideTrees} in Corridor</span> • {stats.outsideTrees} Outside
+                  </div>
+                </div>
+                <div className="stat-icon-wrap green">
+                  <Trees size={18} />
+                </div>
+              </div>
 
-            {/* Inventory Population Breakdown Table */}
-            <div style={{
-              background: 'rgba(15, 23, 42, 0.65)',
-              border: '1px solid #143624',
-              borderRadius: '6px',
-              padding: '6px 10px',
-              fontSize: '11px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '3px',
-              width: '100%'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
-                <span>Raw DeepForest Detections</span>
-                <span style={{ fontWeight: 600, color: '#e2e8f0' }}>{stats.rawTrees.toLocaleString()}</span>
+              {/* Inventory Population Breakdown Table */}
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.65)',
+                border: '1px solid #143624',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '11px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '3px',
+                width: '100%'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
+                  <span>Raw DeepForest Detections</span>
+                  <span style={{ fontWeight: 600, color: '#e2e8f0' }}>{stats.rawTrees.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
+                  <span>LiDAR-Validated Trees</span>
+                  <span style={{ fontWeight: 600, color: '#38bdf8' }}>{stats.validatedTrees.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6ee7b7', fontWeight: 600 }}>
+                  <span>Operational Inventory</span>
+                  <span>{stats.operationalInventory.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#ef4444' }}>
+                  <span>↳ High Priority</span>
+                  <span style={{ fontWeight: 700 }}>{stats.highPriority}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#f59e0b' }}>
+                  <span>↳ Medium Priority</span>
+                  <span style={{ fontWeight: 600 }}>{stats.mediumPriority}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#22c55e' }}>
+                  <span>↳ Low Priority</span>
+                  <span style={{ fontWeight: 600 }}>{stats.lowPriority}</span>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
-                <span>LiDAR-Validated Trees</span>
-                <span style={{ fontWeight: 600, color: '#38bdf8' }}>{stats.validatedTrees.toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6ee7b7', fontWeight: 600 }}>
-                <span>Operational Inventory</span>
-                <span>{stats.operationalInventory.toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#ef4444' }}>
-                <span>↳ High Priority</span>
-                <span style={{ fontWeight: 700 }}>{stats.highPriority}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#f59e0b' }}>
-                <span>↳ Medium Priority</span>
-                <span style={{ fontWeight: 600 }}>{stats.mediumPriority}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#22c55e' }}>
-                <span>↳ Low Priority</span>
-                <span style={{ fontWeight: 600 }}>{stats.lowPriority}</span>
+
+              {/* Compact Funnel Explanation */}
+              <div style={{ fontSize: '9.5px', color: '#64748b', fontStyle: 'italic', textAlign: 'center', width: '100%' }}>
+                {stats.rawTrees.toLocaleString()} raw detections → {stats.validatedTrees.toLocaleString()} LiDAR validated → {stats.operationalInventory.toLocaleString()} confidence-filtered for operational assessment
               </div>
             </div>
-
-            {/* Compact Funnel Explanation */}
-            <div style={{ fontSize: '9.5px', color: '#64748b', fontStyle: 'italic', textAlign: 'center', width: '100%' }}>
-              {stats.rawTrees.toLocaleString()} raw detections → {stats.validatedTrees.toLocaleString()} LiDAR validated → {stats.operationalInventory.toLocaleString()} confidence-filtered for operational assessment
-            </div>
-          </div>
+          )}
 
           {/* Card 2 */}
           <div className="stat-card">
             <div>
               <div className="stat-label">Forest Health Score</div>
-              <div className="stat-value">
-                {stats.totalHealthCells} <span className="stat-unit">cells (25m)</span>
-              </div>
-              <div className="stat-sub">
-                Grades: <span style={{ color: '#16a34a', fontWeight: 700 }}>A:{stats.gradeA}</span> • <span style={{ color: '#65a30d', fontWeight: 700 }}>B:{stats.gradeB}</span> • <span style={{ color: '#ea580c', fontWeight: 700 }}>C:{stats.gradeC}</span> • <span style={{ color: '#dc2626', fontWeight: 700 }}>D:{stats.gradeD}</span>
-              </div>
+              {isUploadMode ? (
+                <>
+                  <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
+                    <span className="badge-pill blocked">[BLOCKED]</span>
+                  </div>
+                  <div className="stat-sub">
+                    No CHM / Health Grid uploaded
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="stat-value">
+                    {stats.totalHealthCells} <span className="stat-unit">cells (25m)</span>
+                  </div>
+                  <div className="stat-sub">
+                    Grades: <span style={{ color: '#16a34a', fontWeight: 700 }}>A:{stats.gradeA}</span> • <span style={{ color: '#65a30d', fontWeight: 700 }}>B:{stats.gradeB}</span> • <span style={{ color: '#ea580c', fontWeight: 700 }}>C:{stats.gradeC}</span> • <span style={{ color: '#dc2626', fontWeight: 700 }}>D:{stats.gradeD}</span>
+                  </div>
+                </>
+              )}
             </div>
             <div className="stat-icon-wrap green">
               <Activity size={18} />
@@ -1044,12 +1099,25 @@ function AppDashboard({ user, logout }) {
           <div className="stat-card">
             <div>
               <div className="stat-label">Terrain TSP Route</div>
-              <div className="stat-value">
-                {stats.terrainDist} <span className="stat-unit">m ({stats.terrainTime} min)</span>
-              </div>
-              <div className="stat-sub">
-                <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>-{stats.terrainSaved} min</span> vs NN • {stats.highPriority} Stops
-              </div>
+              {isUploadMode ? (
+                <>
+                  <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
+                    <span className="badge-pill blocked">[BLOCKED]</span>
+                  </div>
+                  <div className="stat-sub">
+                    No DTM/CHM elevation raster
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="stat-value">
+                    {stats.terrainDist} <span className="stat-unit">m ({stats.terrainTime} min)</span>
+                  </div>
+                  <div className="stat-sub">
+                    <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>-{stats.terrainSaved} min</span> vs NN • {stats.highPriority} Stops
+                  </div>
+                </>
+              )}
             </div>
             <div className="stat-icon-wrap cyan">
               <Navigation size={18} />
@@ -1060,12 +1128,25 @@ function AppDashboard({ user, logout }) {
           <div className="stat-card" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #fefef2 100%)', borderColor: '#e9e4a8' }}>
             <div>
               <div className="stat-label">Canopy Degradation</div>
-              <div className="stat-value" style={{ color: '#856a14' }}>
-                {stats.totalDegPolygons} <span className="stat-unit">zones</span>
-              </div>
-              <div className="stat-sub">
-                <span style={{ color: '#dc2626', fontWeight: 600 }}>{stats.removalCount} Removal</span> • {stats.thinningCount} Thinning
-              </div>
+              {isUploadMode ? (
+                <>
+                  <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
+                    <span className="badge-pill blocked">[BLOCKED]</span>
+                  </div>
+                  <div className="stat-sub">
+                    Needs two temporal acquisitions
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="stat-value" style={{ color: '#856a14' }}>
+                    {stats.totalDegPolygons} <span className="stat-unit">zones</span>
+                  </div>
+                  <div className="stat-sub">
+                    <span style={{ color: '#dc2626', fontWeight: 600 }}>{stats.removalCount} Removal</span> • {stats.thinningCount} Thinning
+                  </div>
+                </>
+              )}
             </div>
             <div className="stat-icon-wrap amber">
               <Scissors size={18} />
@@ -2083,7 +2164,7 @@ function AppDashboard({ user, logout }) {
                       { id: 'priority', label: `Priority Trees (${stats.insideTrees + stats.outsideTrees})`, color: '#d97706' },
                       { id: 'degradation', label: `Degradation Zones (${stats.totalDegPolygons})`, color: '#991b1b' },
                       { id: 'legacyRoute', label: `Route (ExG, legacy, ${stats.legacyDist}m)`, color: '#c084fc' },
-                      { id: 'fires', label: `NASA FIRMS Fires (${stats.fireCount})`, color: '#ea580c' },
+                      { id: 'fires', label: stats.fireStatus === 'UNAVAILABLE' ? 'NASA FIRMS Fires (Unavailable)' : `NASA FIRMS Fires (${stats.fireCount ?? 0})`, color: '#ea580c' },
                     ].map((item) => (
                       <label key={item.id} className="layer-item">
                         <div className="layer-left">
@@ -2197,35 +2278,80 @@ function AppDashboard({ user, logout }) {
 
                 {alertsExpanded && (
                   <div className="collapsible-section-content">
-                    <div className="alert-card priority">
-                      <div className="alert-title">
-                        <AlertTriangle size={13} />
-                        <span>{stats.highPriority} Mandatory Ground Stops</span>
-                      </div>
-                      <div className="alert-text">
-                        All {stats.highPriority} HIGH-priority trees fall within the project corridor and require ground truth verification.
-                      </div>
-                    </div>
+                    {isUploadMode ? (
+                      <>
+                        <div className="alert-card priority">
+                          <div className="alert-title" style={{ justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <AlertTriangle size={13} />
+                              <span>Mandatory Ground Stops</span>
+                            </div>
+                            <span className="badge-pill blocked">[BLOCKED]</span>
+                          </div>
+                          <div className="alert-text">
+                            No project corridor uploaded — priority audit unavailable
+                          </div>
+                        </div>
 
-                    <div className="alert-card route">
-                      <div className="alert-title">
-                        <Navigation size={13} />
-                        <span>Terrain TSP: {stats.terrainDist}m ({stats.terrainTime} min)</span>
-                      </div>
-                      <div className="alert-text">
-                        Held-Karp terrain TSP saved {stats.terrainSaved} min traversal time vs nearest-neighbor.
-                      </div>
-                    </div>
+                        <div className="alert-card route">
+                          <div className="alert-title" style={{ justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <Navigation size={13} />
+                              <span>Terrain TSP</span>
+                            </div>
+                            <span className="badge-pill blocked">[BLOCKED]</span>
+                          </div>
+                          <div className="alert-text">
+                            No DTM/CHM uploaded — terrain routing unavailable
+                          </div>
+                        </div>
 
-                    <div className="alert-card fire">
-                      <div className="alert-title">
-                        <Scissors size={13} />
-                        <span>{stats.totalDegPolygons} Canopy Loss Zones</span>
-                      </div>
-                      <div className="alert-text">
-                        {stats.removalCount} severe removal (ΔH ≤ -5m) & {stats.thinningCount} thinning polygons via LiDAR differencing.
-                      </div>
-                    </div>
+                        <div className="alert-card fire">
+                          <div className="alert-title" style={{ justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <Scissors size={13} />
+                              <span>Canopy Loss Zones</span>
+                            </div>
+                            <span className="badge-pill blocked">[BLOCKED]</span>
+                          </div>
+                          <div className="alert-text">
+                            Needs two acquisition dates (single epoch uploaded)
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="alert-card priority">
+                          <div className="alert-title">
+                            <AlertTriangle size={13} />
+                            <span>{stats.highPriority} Mandatory Ground Stops</span>
+                          </div>
+                          <div className="alert-text">
+                            All {stats.highPriority} HIGH-priority trees fall within the project corridor and require ground truth verification.
+                          </div>
+                        </div>
+
+                        <div className="alert-card route">
+                          <div className="alert-title">
+                            <Navigation size={13} />
+                            <span>Terrain TSP: {stats.terrainDist}m ({stats.terrainTime} min)</span>
+                          </div>
+                          <div className="alert-text">
+                            Held-Karp terrain TSP saved {stats.terrainSaved} min traversal time vs nearest-neighbor.
+                          </div>
+                        </div>
+
+                        <div className="alert-card fire">
+                          <div className="alert-title">
+                            <Scissors size={13} />
+                            <span>{stats.totalDegPolygons} Canopy Loss Zones</span>
+                          </div>
+                          <div className="alert-text">
+                            {stats.removalCount} severe removal (ΔH ≤ -5m) & {stats.thinningCount} thinning polygons via LiDAR differencing.
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -2316,43 +2442,45 @@ function AppDashboard({ user, logout }) {
               </div>
 
               {/* 13 HIGH PRIORITY ITINERARY TABLE */}
-              <div className="panel-section">
-                <div
-                  className="section-heading"
-                  onClick={() => setStopsExpanded(!stopsExpanded)}
-                  style={{ cursor: 'pointer', justifyContent: 'space-between' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Navigation size={14} style={{ color: 'var(--vd-deep)' }} />
-                    <span>13 Audit Stops (Sequence)</span>
-                  </div>
-                  {stopsExpanded ? <ChevronUp size={13} style={{ color: 'var(--vd-text-secondary)' }} /> : <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />}
-                </div>
-
-                {stopsExpanded && (
-                  <div className="collapsible-section-content">
-                    <div className="stops-table-card compact">
-                      {orderedStops.map((st) => (
-                        <div
-                          key={st.stopNum}
-                          className="stops-row"
-                          onClick={() => handleFocusStop(st)}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ background: 'var(--vd-aqua)', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9.5px', fontWeight: 800 }}>
-                              {st.stopNum}
-                            </span>
-                            <span style={{ fontWeight: 700, color: 'var(--vd-text-heading)' }}>Tree #{st.treeId}</span>
-                          </div>
-                          <div style={{ color: '#b45309', fontFamily: 'JetBrains Mono', fontSize: '9.5px', fontWeight: 600 }}>
-                            {(st.properties.confidence * 100).toFixed(1)}%
-                          </div>
-                        </div>
-                      ))}
+              {!isUploadMode && (
+                <div className="panel-section">
+                  <div
+                    className="section-heading"
+                    onClick={() => setStopsExpanded(!stopsExpanded)}
+                    style={{ cursor: 'pointer', justifyContent: 'space-between' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Navigation size={14} style={{ color: 'var(--vd-deep)' }} />
+                      <span>13 Audit Stops (Sequence)</span>
                     </div>
+                    {stopsExpanded ? <ChevronUp size={13} style={{ color: 'var(--vd-text-secondary)' }} /> : <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />}
                   </div>
-                )}
-              </div>
+
+                  {stopsExpanded && (
+                    <div className="collapsible-section-content">
+                      <div className="stops-table-card compact">
+                        {orderedStops.map((st) => (
+                          <div
+                            key={st.stopNum}
+                            className="stops-row"
+                            onClick={() => handleFocusStop(st)}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ background: 'var(--vd-aqua)', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9.5px', fontWeight: 800 }}>
+                                {st.stopNum}
+                              </span>
+                              <span style={{ fontWeight: 700, color: 'var(--vd-text-heading)' }}>Tree #{st.treeId}</span>
+                            </div>
+                            <div style={{ color: '#b45309', fontFamily: 'JetBrains Mono', fontSize: '9.5px', fontWeight: 600 }}>
+                              {(st.properties.confidence * 100).toFixed(1)}%
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* DATA SOURCES */}
               <div className="panel-section">

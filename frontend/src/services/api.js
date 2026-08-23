@@ -50,8 +50,40 @@ export const apiService = {
   getDegradation: (site = 'OSBS_large_2019') =>
     fetchWithFallback(`${API_BASE}/gis/degradation?site=${site}`, '/data/chm_loss_polygons.geojson'),
 
-  getFireHotspots: (preset = 'osbs_live') =>
-    fetchWithFallback(`${API_BASE}/fire-hotspots?preset=${preset}`, `/data/fire_hotspots_${preset}.geojson`),
+  getFireHotspots: async (preset = 'osbs_live') => {
+    try {
+      const res = await fetch(`${API_BASE}/fire-hotspots?preset=${preset}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.geojson) {
+          const geo = data.geojson;
+          geo.status = data.status || 'AVAILABLE';
+          geo.reason = data.reason || null;
+          geo.hotspot_count = data.hotspot_count;
+          geo.source = data.source;
+          return geo;
+        }
+        return data;
+      }
+    } catch (err) {
+      console.warn(`[VanDrishti API] Live endpoint ${API_BASE}/fire-hotspots unavailable, falling back to static data:`, err);
+    }
+    try {
+      const fallbackRes = await fetch(`/data/fire_hotspots_${preset}.geojson`);
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        fallbackData.status = 'UNAVAILABLE';
+        fallbackData.reason = 'NASA FIRMS API unreachable (served static baseline)';
+        return fallbackData;
+      }
+    } catch (_) {}
+    return {
+      type: 'FeatureCollection',
+      features: [],
+      status: 'UNAVAILABLE',
+      reason: 'NASA FIRMS API unreachable'
+    };
+  },
 
   getCostSurface: (site = 'osbs') =>
     fetchWithFallback(`${API_BASE}/gis/cost-surface?site=${site}`, `/data/${site}_cost_surface.json`),

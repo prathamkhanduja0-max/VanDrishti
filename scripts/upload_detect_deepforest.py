@@ -55,9 +55,9 @@ PATCH_SIZE = 400
 PATCH_OVERLAP = 0.25
 IOU_THRESHOLD = 0.15
 
-# Upload path is interactive; refuse rasters large enough to stall the request. The bundled
-# 2500x2500 tile takes minutes on CPU, which is fine for a batch run and not for a click.
-DEFAULT_MAX_PIXELS = 4_000_000       # e.g. 2000 x 2000
+# Upload path is interactive; refuse rasters large enough to stall the request.
+# OSBS_large_2019.tif is 2500x2500 = 6.25 MP and was previously rejected by the 4 MP cap.
+DEFAULT_MAX_PIXELS = 8_000_000       # e.g. up to 2500 x 2500 (6.25 MP)
 
 
 def _deepforest_available() -> bool:
