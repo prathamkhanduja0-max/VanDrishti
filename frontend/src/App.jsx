@@ -2058,7 +2058,7 @@ function AppDashboard({ user, logout }) {
                   style={{ border: '1px solid var(--vd-border-subtle)' }}
                 />
                 <div style={{ fontSize: '11px', color: 'var(--vd-text-secondary)', lineHeight: 1.4 }}>
-                  <b>Panel 1 (Left)</b>: High-Resolution RGB Orthomosaic with Terrain-Aware TSP Route (488.9 m, 14.96 min) across 13 HIGH stops.<br />
+                  <b>Panel 1 (Left)</b>: High-Resolution RGB Orthomosaic with Terrain-Aware TSP Route (432.1 m, 14.96 min) across 13 HIGH stops.<br />
                   <b>Panel 2 (Right)</b>: NEON LiDAR Canopy Height Model (CHM p95=16.6m) showing optimal navigation through natural forest gaps.
                 </div>
               </div>
