@@ -38,6 +38,7 @@ def load_site_data(site_name: str) -> Dict[str, Any]:
 
     # Try frontend public data or processed directory
     candidates = [
+        REPO_ROOT / f"frontend/public/data/{site_key}_full_assessment.json",
         REPO_ROOT / f"frontend/public/data/{site_key}_assessment.json",
         REPO_ROOT / f"data/processed/{site_key}_assessment.json",
         REPO_ROOT / f"frontend/public/data/{stem}_assessment.json",
@@ -101,7 +102,7 @@ def load_site_data(site_name: str) -> Dict[str, Any]:
                     "module": "Multi-temporal Degradation",
                     "key": "degradation",
                     "level": "FULL" if site_key == "osbs" else "BLOCKED",
-                    "message": "Multi-index NDVI/NDRE bi-temporal change detection" if site_key == "osbs" else "Single epoch only — change detection unavailable",
+                    "message": "Bi-temporal CHM change detection" if site_key == "osbs" else "Single epoch only — change detection unavailable",
                     "note": "Canopy loss and thinning classification",
                 },
                 {

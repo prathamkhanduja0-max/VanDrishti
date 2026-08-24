@@ -54,7 +54,7 @@ def generate_diversion_csv(site_name: str = "OSBS_large_2019") -> str:
             item.get("priority"),
             item.get("rationale"),
             site_ctx.get("site_id"),
-            site_ctx.get("site_label")
+            site_ctx.get("study_tile_label")
         ])
 
     return output.getvalue()
@@ -145,7 +145,7 @@ def generate_diversion_pdf(site_name: str = "OSBS_large_2019") -> bytes:
         # 1. Header Title Banner & Site Context
         story.append(Paragraph("VanDrishti — Forest Intelligence Platform", subtitle_style))
         story.append(Spacer(1, 2))
-        story.append(Paragraph(f"Site-Specific Forest Diversion Assessment: {site_ctx.get('site_label')}", title_style))
+        story.append(Paragraph(f"Site-Specific Forest Diversion Assessment: {site_ctx.get('study_tile_label')}", title_style))
         story.append(Spacer(1, 3))
         story.append(Paragraph(f"Generated: {site_ctx.get('generated_at')} | CRS: {site_ctx.get('crs_processing')} → {site_ctx.get('crs_webgis')}", body_style))
         story.append(Spacer(1, 5))
@@ -248,7 +248,7 @@ def generate_diversion_pdf(site_name: str = "OSBS_large_2019") -> bytes:
     except ImportError:
         fallback_text = (
             f"VanDrishti — Forest Diversion Assessment Report\n"
-            f"Site: {site_ctx.get('site_label')}\n"
+            f"Site: {site_ctx.get('study_tile_label')}\n"
             f"Generated: {site_ctx.get('generated_at')}\n\n"
             f"SUMMARY:\n"
             f"Corridor Area: {summary.get('corridor_area_sq_m'):,.1f} m²\n"
