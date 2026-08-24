@@ -5,8 +5,6 @@ Configuration and settings for VanDrishti backend API.
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv
-
 # Base paths
 BACKEND_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BACKEND_DIR.parent
@@ -20,12 +18,15 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 RESULTS_GIS_DIR.mkdir(parents=True, exist_ok=True)
 FRONTEND_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# Load environment variables (.env in REPO_ROOT or current dir)
-ENV_PATH = REPO_ROOT / ".env"
-if ENV_PATH.exists():
-    load_dotenv(dotenv_path=ENV_PATH)
-else:
-    load_dotenv()
+try:
+    from dotenv import load_dotenv
+    ENV_PATH = REPO_ROOT / ".env"
+    if ENV_PATH.exists():
+        load_dotenv(dotenv_path=ENV_PATH)
+    else:
+        load_dotenv()
+except Exception:
+    pass
 
 # Database
 DB_PATH = BACKEND_DIR / "vandrishti.db"

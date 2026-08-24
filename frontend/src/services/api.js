@@ -27,6 +27,8 @@ async function fetchWithFallback(apiUrl, fallbackUrl) {
   return null;
 }
 
+const OSBS_DEMO_SITES = new Set(['OSBS_large_2019', 'osbs']);
+
 export const apiService = {
   // GIS Layers
   getBoundary: (site = 'OSBS_large_2019') =>
@@ -44,14 +46,50 @@ export const apiService = {
   getLegacyRoute: (site = 'OSBS_large_2019') =>
     fetchWithFallback(`${API_BASE}/gis/route?site=${site}&route_type=legacy`, `/data/${site}_field_route_lcp_optimized.geojson`),
 
-  getHealthGrid: (site = 'OSBS_large_2019') =>
-    fetchWithFallback(`${API_BASE}/gis/health-grid?site=${site}`, '/data/forest_health_grid.geojson'),
+  getHealthGrid: (site = 'OSBS_large_2019') => {
+    const fallback = OSBS_DEMO_SITES.has(site) ? '/data/forest_health_grid.geojson' : null;
+    return fetchWithFallback(`${API_BASE}/gis/health-grid?site=${site}`, fallback);
+  },
 
-  getDegradation: (site = 'OSBS_large_2019') =>
-    fetchWithFallback(`${API_BASE}/gis/degradation?site=${site}`, '/data/chm_loss_polygons.geojson'),
+  getDegradation: (site = 'OSBS_large_2019') => {
+    const fallback = OSBS_DEMO_SITES.has(site) ? '/data/chm_loss_polygons.geojson' : null;
+    return fetchWithFallback(`${API_BASE}/gis/degradation?site=${site}`, fallback);
+  },
 
-  getFireHotspots: (preset = 'osbs_live') =>
-    fetchWithFallback(`${API_BASE}/fire-hotspots?preset=${preset}`, `/data/fire_hotspots_${preset}.geojson`),
+  getFireHotspots: async (preset = 'osbs_live') => {
+    try {
+      const res = await fetch(`${API_BASE}/fire-hotspots?preset=${preset}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.geojson) {
+          const geo = data.geojson;
+          geo.status = data.status || 'AVAILABLE';
+          geo.reason = data.reason || null;
+          geo.hotspot_count = data.hotspot_count;
+          geo.source = data.source;
+          return geo;
+        }
+        return data;
+      }
+    } catch (err) {
+      console.warn(`[VanDrishti API] Live endpoint ${API_BASE}/fire-hotspots unavailable, falling back to static data:`, err);
+    }
+    try {
+      const fallbackRes = await fetch(`/data/fire_hotspots_${preset}.geojson`);
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        fallbackData.status = 'UNAVAILABLE';
+        fallbackData.reason = 'NASA FIRMS API unreachable (served static baseline)';
+        return fallbackData;
+      }
+    } catch (_) {}
+    return {
+      type: 'FeatureCollection',
+      features: [],
+      status: 'UNAVAILABLE',
+      reason: 'NASA FIRMS API unreachable'
+    };
+  },
 
   getCostSurface: (site = 'osbs') =>
     fetchWithFallback(`${API_BASE}/gis/cost-surface?site=${site}`, `/data/${site}_cost_surface.json`),
@@ -59,6 +97,12 @@ export const apiService = {
   getAssessment: (site = 'osbs') => {
     const key = site === 'teak' ? 'teak' : 'osbs_full';
     return fetchWithFallback(`${API_BASE}/gis/assessment?site=${site}`, `/data/${key}_assessment.json`);
+  },
+
+  getDiversionAssessment: (site = 'OSBS_large_2019') => {
+    const encodedSite = encodeURIComponent(site);
+    const key = site.toLowerCase().includes('teak') ? 'teak' : 'osbs';
+    return fetchWithFallback(`${API_BASE}/diversion/assessment?site=${encodedSite}`, `/data/${key}_diversion_assessment.json`);
   },
 
   // Pipeline Job Trigger & Status

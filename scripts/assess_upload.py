@@ -281,7 +281,7 @@ def run_fast_tree_detection(raster_path: Path, max_dim: int = 1500,
             "type": "FeatureCollection",
             "crs": {
                 "type": "name",
-                "properties": {"name": "EPSG:4326" if has_crs else "UNREFERENCED"}
+                "properties": {"name": str(crs) if has_crs else "UNREFERENCED"}
             },
             "features": features
         }
@@ -310,22 +310,11 @@ def _detection_message(det_status: str, det: Dict[str, Any]) -> str:
     if det.get("error"):
         return f"Preview failed: {det['error']}"
     total = det.get("count", 0)
-    method = det.get("method", "exg_peak_heuristic")
-
-    if method == "deepforest":
-        msg = f"{total:,} crowns detected via DeepForest (NEON-pretrained RetinaNet)"
-        dropped = det.get("filters", {}).get("size_dropped", 0) + det.get("filters", {}).get("dedup_dropped", 0)
-        if dropped > 0:
-            msg += f" ({dropped} filtered by crown size/dedup)"
-        return msg
-
     if total == 0:
         return "No vegetation peaks found (check imagery bands / vegetation cover)"
     msg = f"{total:,} greenness peaks (fast optical preview, not AI-validated)"
     if det.get("truncated"):
         msg += f" — {det.get('count_rendered', 0):,} strongest shown on map"
-    if det.get("fallback_reason"):
-        msg += f" (ExG fallback: {det['fallback_reason']})"
     return msg
 
 
@@ -361,28 +350,13 @@ def assess_upload(
     total_modules = len(capabilities)
     available_count = full_count + deg_count
 
-    # Run detection on the uploaded image if valid: Try DeepForest FIRST, then fallback to ExG
+    # Run detection on the uploaded image if valid
     detection_results = {"count": 0, "features": []}
     if run_detection and primary_info.get("exists") and not primary_info.get("error"):
-        deepforest_ran = False
         try:
-            from upload_detect_deepforest import detect_upload_deepforest
-            df_res = detect_upload_deepforest(raster_path)
-            if df_res.get("ok"):
-                detection_results = df_res
-                deepforest_ran = True
-            else:
-                fallback_reason = df_res.get("detail") or df_res.get("reason") or "DeepForest unavailable"
-        except Exception as df_err:
-            fallback_reason = str(df_err)
-
-        if not deepforest_ran:
-            try:
-                detection_results = run_fast_tree_detection(raster_path)
-                if "fallback_reason" in locals():
-                    detection_results["fallback_reason"] = fallback_reason
-            except Exception as det_err:
-                detection_results = {"count": 0, "error": str(det_err), "method": "failed"}
+            detection_results = run_fast_tree_detection(raster_path)
+        except Exception as det_err:
+            detection_results = {"count": 0, "error": str(det_err)}
 
     # Structured checklist for frontend rendering
     checklist = []
@@ -431,7 +405,7 @@ def assess_upload(
         "module": "Canopy Degradation",
         "key": "degradation",
         "level": deg_status,
-        "message": "Multi-temporal loss differencing" if deg_status == "FULL" else "Needs two acquisition dates (single epoch uploaded)",
+        "message": "Multi-temporal loss differencing" if deg_status == "FULL" else "Needs two acquisition dates (single epoch available)",
         "details": deg_cap.get("lost_capability", []),
         "note": deg_cap.get("note", "")
     })
@@ -439,11 +413,20 @@ def assess_upload(
     # 5. Forest Health Score
     health_cap = capabilities.get("health_score", {})
     health_status = health_cap.get("level", "BLOCKED")
+    health_cell_m = 25.0
+    ref_raster = chm_path or raster_path
+    if ref_raster and Path(ref_raster).exists():
+        try:
+            from forest_health_score import compute_adaptive_cell_size
+            health_cell_m = compute_adaptive_cell_size(ref_raster)
+        except Exception:
+            health_cell_m = 25.0
+    cell_size_str = f"{int(health_cell_m) if health_cell_m == int(health_cell_m) else health_cell_m} m"
     checklist.append({
         "module": "Forest Health Score",
         "key": "health_score",
         "level": health_status,
-        "message": "25m composite grid scoring" if health_status == "FULL" else "Needs multi-temporal LiDAR CHMs",
+        "message": f"{cell_size_str} composite grid" if health_status == "FULL" else "Needs multi-temporal LiDAR CHMs",
         "details": health_cap.get("lost_capability", []),
         "note": health_cap.get("note", "")
     })
@@ -477,15 +460,10 @@ def assess_upload(
         "warnings": warnings,
         "detection_results": {
             "count": detection_results.get("count", 0),
-            "raw_count": detection_results.get("raw_count", detection_results.get("count", 0)),
-            "count_rendered": detection_results.get("count_rendered", detection_results.get("count", 0)),
+            "count_rendered": detection_results.get("count_rendered", 0),
             "truncated": detection_results.get("truncated", False),
             "method": detection_results.get("method", "exg_peak_heuristic"),
-            "fallback_reason": detection_results.get("fallback_reason"),
             "resolution_normalized": detection_results.get("resolution_normalized", False),
-            "filters": detection_results.get("filters", {}),
-            "detector_params": detection_results.get("detector_params", {}),
-            "notes": detection_results.get("notes", []),
             "params": detection_results.get("params", {}),
             "error": detection_results.get("error"),
             "geojson": detection_results.get("geojson")

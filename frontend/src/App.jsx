@@ -49,12 +49,15 @@ import {
   X,
   Plus,
   LogOut,
-  Download
+  Download,
+  ShieldCheck
 } from 'lucide-react';
 import { computePointToPointPath } from './utils/dijkstra';
 import { apiService } from './services/api';
 import { useAuth } from './context/AuthContext';
 import LoginPage from './components/LoginPage';
+import { DiversionAssessmentView } from './components/DiversionAssessmentView';
+import { deriveModuleStatus } from './utils/moduleStatus';
 
 
 // Custom Marker Icons for Route Stops and Entry Point
@@ -254,8 +257,26 @@ function AppDashboard({ user, logout }) {
 
   // Uploaded Assessment State (Analyze Your Forest)
   const [selectedUploadPreset, setSelectedUploadPreset] = useState('teak');
+  const [currentSite, setCurrentSite] = useState('OSBS_large_2019');
   const [uploadedAssessment, setUploadedAssessment] = useState(null);
+  const [uploadedHealthGridData, setUploadedHealthGridData] = useState(null);
+  const [uploadedDegradationData, setUploadedDegradationData] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const isUploadMode = activeNav === 'Analyze Your Forest' && Boolean(uploadedAssessment);
+  const hasDtm = Boolean(uploadedAssessment?.detected_siblings?.dtm || activeCostSurface?.active_terms?.includes('Slope'));
+  const hasChm = Boolean(uploadedAssessment?.detected_siblings?.chm || activeCostSurface?.active_terms?.includes('CHM'));
+  const hasTerrainData = hasDtm || hasChm;
+  const routingLevel = uploadedAssessment?.capabilities?.routing?.level || (hasDtm ? 'FULL' : (hasChm ? 'DEGRADED' : 'BLOCKED'));
+  const routingModeLabel = activeCostSurface?.mode_label || (routingLevel === 'FULL' ? 'terrain-aware' : (hasChm ? 'canopy-aware' : 'optical proxy'));
+
+  const triggerDownload = (url) => {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   // Layer Visibility States (Interpretable defaults on load)
   const [layers, setLayers] = useState({
@@ -604,6 +625,24 @@ function AppDashboard({ user, logout }) {
       } catch (costErr) {
         console.warn('Cost surface unavailable for preset:', costErr);
       }
+
+      if (preset === 'osbs') {
+        try {
+          const [hgData, degData] = await Promise.all([
+            apiService.getHealthGrid('OSBS_large_2019'),
+            apiService.getDegradation('OSBS_large_2019'),
+          ]);
+          setUploadedHealthGridData(hgData);
+          setUploadedDegradationData(degData);
+        } catch (_) {
+          setUploadedHealthGridData(null);
+          setUploadedDegradationData(null);
+        }
+      } else {
+        // TEAK is single-epoch (2018 only) and has no multi-temporal health/degradation grids
+        setUploadedHealthGridData(null);
+        setUploadedDegradationData(null);
+      }
     } catch (e) {
       console.error('Error loading preset assessment via API:', e);
     } finally {
@@ -664,8 +703,30 @@ function AppDashboard({ user, logout }) {
       if (previewUrl) assessmentData.preview_url = previewUrl;
       if (previewBounds) assessmentData.preview_bounds_wgs84 = previewBounds;
       if (res?.id) assessmentData.upload_id = res.id;
+      if (res?.metadata?.health_grid) assessmentData.health_grid = res.metadata.health_grid;
+      if (res?.metadata?.degradation) assessmentData.degradation = res.metadata.degradation;
+      if (res?.metadata?.detected_siblings) assessmentData.detected_siblings = res.metadata.detected_siblings;
 
       setUploadedAssessment(assessmentData);
+
+      // Fetch health grid and degradation layers for the uploaded dataset
+      if (res?.id) {
+        try {
+          const [hgData, degData] = await Promise.all([
+            apiService.getHealthGrid(res.id),
+            apiService.getDegradation(res.id),
+          ]);
+          setUploadedHealthGridData(hgData);
+          setUploadedDegradationData(degData);
+        } catch (layerErr) {
+          console.warn('Health/degradation layers unavailable for upload:', layerErr);
+          setUploadedHealthGridData(null);
+          setUploadedDegradationData(null);
+        }
+      } else {
+        setUploadedHealthGridData(null);
+        setUploadedDegradationData(null);
+      }
 
       // Fetch and activate the cost surface for this upload (safely wrapped)
       if (res?.id) {
@@ -698,16 +759,21 @@ function AppDashboard({ user, logout }) {
 
   // Derived Real Statistics (100% dynamic from GeoJSON)
   const stats = useMemo(() => {
-    const totalTrees = treesData?.features?.length || 0;
+    // 3 Distinct Inventory Populations
+    const rawTrees = 1998; // Raw DeepForest model predictions
+    const validatedTrees = treesData?.features?.length || 1979; // LiDAR CHM height-validated trees (>= 2.0m)
     const insideTrees = treesData?.features?.filter((f) => f.properties?.inside_boundary === true)?.length || 0;
-    const outsideTrees = totalTrees - insideTrees;
+    const outsideTrees = validatedTrees - insideTrees;
 
     const highPriorityList = priorityData?.features?.filter((f) => f.properties?.verification_priority === 'HIGH') || [];
     const highPriority = highPriorityList.length;
     const mediumPriority = priorityData?.features?.filter((f) => f.properties?.verification_priority === 'MEDIUM')?.length || 0;
     const lowPriority = priorityData?.features?.filter((f) => f.properties?.verification_priority === 'LOW')?.length || 0;
+    const operationalInventory = priorityData?.features?.length || (highPriority + mediumPriority + lowPriority);
 
-    const fireCount = fireHotspotsData?.features?.length || 0;
+    const fireStatus = fireHotspotsData?.status || (fireHotspotsData?.features ? 'AVAILABLE' : 'UNAVAILABLE');
+    const fireReason = fireHotspotsData?.reason || (fireStatus === 'UNAVAILABLE' ? 'NASA FIRMS API unreachable' : null);
+    const fireCount = fireStatus === 'UNAVAILABLE' ? null : (fireHotspotsData?.features?.length ?? null);
 
     // Terrain Route Statistics
     const terrainProps = terrainRouteData?.features?.[0]?.properties || {};
@@ -727,6 +793,11 @@ function AppDashboard({ user, logout }) {
     const gradeC = healthFeatures.filter((f) => f.properties?.grade === 'C').length;
     const gradeD = healthFeatures.filter((f) => f.properties?.grade === 'D').length;
     const totalHealthCells = healthFeatures.length;
+    const healthCellSize =
+      healthGridData?.cell_size_m ||
+      healthGridData?.stats?.cell_size_m ||
+      healthFeatures?.[0]?.properties?.cell_size_m ||
+      25;
 
     // Degradation Statistics
     const degFeatures = degradationData?.features || [];
@@ -742,13 +813,18 @@ function AppDashboard({ user, logout }) {
     const greenCoverPercent = ((GREEN_COVER_AREA_M2 / STUDY_AREA_M2) * 100).toFixed(1);
 
     return {
-      totalTrees,
+      rawTrees,
+      validatedTrees,
+      operationalInventory,
+      totalTrees: validatedTrees,
       insideTrees,
       outsideTrees,
       highPriority,
       mediumPriority,
       lowPriority,
       fireCount,
+      fireStatus,
+      fireReason,
       terrainDist: terrainDist.toFixed(1),
       terrainTime: terrainTime.toFixed(2),
       terrainSaved: terrainSaved.toFixed(2),
@@ -756,6 +832,7 @@ function AppDashboard({ user, logout }) {
       routeSequence,
       highPriorityList,
       totalHealthCells,
+      healthCellSize,
       gradeA,
       gradeB,
       gradeC,
@@ -769,6 +846,38 @@ function AppDashboard({ user, logout }) {
       validatedTreeCount,
     };
   }, [treesData, priorityData, fireHotspotsData, terrainRouteData, legacyRouteData, healthGridData, degradationData]);
+
+  // Derived Module Capabilities & Status (Single Source of Truth)
+  const moduleContext = useMemo(() => ({
+    isUploadMode,
+    uploadedAssessment,
+    activeCostSurface,
+    uploadedHealthGridData,
+    uploadedDegradationData,
+    fireHotspotsData,
+    stats,
+  }), [
+    isUploadMode,
+    uploadedAssessment,
+    activeCostSurface,
+    uploadedHealthGridData,
+    uploadedDegradationData,
+    fireHotspotsData,
+    stats,
+  ]);
+
+  const detectionStatus = useMemo(() => deriveModuleStatus('detection', moduleContext), [moduleContext]);
+  const healthStatus = useMemo(() => deriveModuleStatus('health_score', moduleContext), [moduleContext]);
+  const routingStatus = useMemo(() => deriveModuleStatus('routing', moduleContext), [moduleContext]);
+  const degradationStatus = useMemo(() => deriveModuleStatus('degradation', moduleContext), [moduleContext]);
+  const priorityStatus = useMemo(() => deriveModuleStatus('priority', moduleContext), [moduleContext]);
+  const fireModuleStatus = useMemo(() => deriveModuleStatus('fire', moduleContext), [moduleContext]);
+
+  const uploadedHealthCellSize = healthStatus.stats.cellSize;
+  const uploadedGradeA = healthStatus.stats.gradeA;
+  const uploadedGradeB = healthStatus.stats.gradeB;
+  const uploadedGradeC = healthStatus.stats.gradeC;
+  const uploadedGradeD = healthStatus.stats.gradeD;
 
   // High priority stops ordered by visiting sequence
   const orderedStops = useMemo(() => {
@@ -816,6 +925,87 @@ function AppDashboard({ user, logout }) {
       case 'D': return '#ef4444'; // Red
       default: return '#94a3b8';
     }
+  };
+
+  // Shared Forest Health Grid style & popup logic
+  const renderSharedHealthGrid = (geoData, paneName, prefix = '') => {
+    if (!geoData) return null;
+    const layer = (
+      <GeoJSON
+        key={`health-grid-${prefix}-${geoData.features?.length || 0}`}
+        data={geoData}
+        style={(feature) => {
+          const grade = feature.properties?.grade;
+          const fillColor = getHealthGradeColor(grade);
+          return {
+            fillColor: fillColor,
+            fillOpacity: 0.50,
+            color: '#ffffff',
+            weight: 1.0,
+            opacity: 0.8,
+          };
+        }}
+        onEachFeature={(feature, layerInstance) => {
+          const p = feature.properties || {};
+          const cellSize = p.cell_size_m || geoData?.cell_size_m || 25;
+          layerInstance.bindPopup(`
+            <div style="font-size:12px; min-width:180px;">
+              <b style="font-size:13px; color:${getHealthGradeColor(p.grade)};">Cell ${p.cell_id} — Grade ${p.grade}</b><br/>
+              <b>Health Score:</b> <span style="font-weight:bold; color:#f1f5f9;">${p.score !== null && p.score !== undefined ? Number(p.score).toFixed(1) : 'N/A'} / 100</span><br/>
+              <b>Canopy Cover:</b> ${p.canopy_cover !== undefined ? (p.canopy_cover * 100).toFixed(1) + '%' : 'N/A'}<br/>
+              <b>Structural Diversity (σ):</b> ${p.structural_diversity !== undefined ? p.structural_diversity + ' m' : 'N/A'}<br/>
+              <b>Loss Density:</b> ${p.loss_density !== undefined ? (p.loss_density * 100).toFixed(2) + '%' : 'N/A'}<br/>
+              <span style="font-size:10px; color:#94a3b8;">${cellSize} m composite grid (${cellSize}m × ${cellSize}m)</span>
+            </div>
+          `);
+          layerInstance.on('click', () => setSelectedFeature({ type: 'health_cell', properties: p }));
+        }}
+      />
+    );
+    if (paneName) {
+      return <Pane name={paneName} style={{ zIndex: 450 }}>{layer}</Pane>;
+    }
+    return layer;
+  };
+
+  // Shared Canopy Degradation Polygons style & popup logic
+  const renderSharedDegradation = (geoData, paneName, prefix = '') => {
+    if (!geoData) return null;
+    const layer = (
+      <GeoJSON
+        key={`degradation-${prefix}-${geoData.features?.length || 0}`}
+        data={geoData}
+        style={(feature) => {
+          const className = feature.properties?.class_name;
+          const isRemoval = className === 'removal' || feature.properties?.class_id === 1;
+          return {
+            fillColor: isRemoval ? '#991b1b' : '#f97316',
+            fillOpacity: 0.65,
+            color: isRemoval ? '#ef4444' : '#fdba74',
+            weight: 1.5,
+            opacity: 0.95,
+          };
+        }}
+        onEachFeature={(feature, layerInstance) => {
+          const p = feature.properties || {};
+          layerInstance.bindPopup(`
+            <div style="font-size:12px;">
+              <b style="color:${p.class_name === 'removal' ? '#ef4444' : '#fb923c'}; font-size:13px;">
+                Canopy ${p.class_name ? p.class_name.toUpperCase() : 'DEGRADATION'}
+              </b><br/>
+              <b>Impact Area:</b> ${p.area_m2} m²<br/>
+              <b>Classification:</b> ${p.class_name === 'removal' ? 'Severe Canopy Loss (ΔH ≤ -5m)' : 'Canopy Thinning (-5m < ΔH ≤ -2m)'}<br/>
+              <span style="font-size:10px; color:#94a3b8;">Multi-Temporal LiDAR Differencing</span>
+            </div>
+          `);
+          layerInstance.on('click', () => setSelectedFeature({ type: 'degradation', properties: p }));
+        }}
+      />
+    );
+    if (paneName) {
+      return <Pane name={paneName} style={{ zIndex: 460 }}>{layer}</Pane>;
+    }
+    return layer;
   };
 
   return (
@@ -873,10 +1063,16 @@ function AppDashboard({ user, logout }) {
           <div className="scope-badge-card">
             <div className="scope-badge-title">
               <Sparkles size={13} />
-              <span>OSBS Study Area</span>
+              <span>{isUploadMode ? (uploadedAssessment?.raster_info?.filename || 'Uploaded Dataset') : 'OSBS Study Area'}</span>
             </div>
             <div className="scope-badge-desc">
-              250m × 250m (6.25 ha, NEON LiDAR & AOP)
+              {isUploadMode ? (
+                uploadedAssessment?.raster_info?.shape
+                  ? `${uploadedAssessment.raster_info.shape[1]}×${uploadedAssessment.raster_info.shape[0]} px (${typeof uploadedAssessment.raster_info.area_ha === 'number' ? uploadedAssessment.raster_info.area_ha + ' ha' : uploadedAssessment.raster_info.area_ha})`
+                  : 'Custom Raster Extent'
+              ) : (
+                '250m × 250m (6.25 ha, NEON LiDAR & AOP)'
+              )}
             </div>
           </div>
 
@@ -884,14 +1080,15 @@ function AppDashboard({ user, logout }) {
           <nav className="nav-list">
             {[
               { id: 'Overview', icon: Layers, label: 'Overview' },
-              { id: 'Forest Health', icon: Activity, label: `Forest Health (${stats.totalHealthCells} Cells)` },
-              { id: 'Degradation', icon: Scissors, label: `Degradation (${stats.totalDegPolygons} Polygons)` },
-              { id: 'Terrain Route', icon: Navigation, label: `Terrain Route (${stats.terrainDist}m)` },
-              { id: 'Validated Trees', icon: Compass, label: `Validated Trees (${stats.totalTrees})` },
-              { id: 'Priority Audit', icon: AlertTriangle, label: `Priority Audit (${stats.highPriority} High)` },
+              { id: 'Forest Health', icon: Activity, label: isUploadMode ? 'Forest Health' : `Forest Health (${stats.totalHealthCells} Cells)` },
+              { id: 'Degradation', icon: Scissors, label: isUploadMode ? 'Degradation' : `Degradation (${stats.totalDegPolygons} Polygons)` },
+              { id: 'Terrain Route', icon: Navigation, label: isUploadMode ? 'Terrain Route' : `Terrain Route (${stats.terrainDist}m)` },
+              { id: 'Validated Trees', icon: Compass, label: isUploadMode ? 'Validated Trees' : `Validated Trees (${stats.totalTrees})` },
+              { id: 'Priority Audit', icon: AlertTriangle, label: isUploadMode ? 'Priority Audit' : `Priority Audit (${stats.highPriority} High)` },
+              { id: 'Diversion Assessment', icon: ShieldCheck, label: 'Diversion Assessment' },
               { id: 'Analyze Your Forest', icon: UploadCloud, label: 'Analyze Your Forest' },
               { id: 'Canopy Mask', icon: Eye, label: 'Canopy & Route View' },
-              { id: 'Fire Risk', icon: Flame, label: `Fire Risk (${stats.fireCount})` },
+              { id: 'Fire Risk', icon: Flame, label: isUploadMode ? 'Fire Risk' : (stats.fireStatus === 'UNAVAILABLE' ? 'Fire Risk (Unavailable)' : `Fire Risk (${stats.fireCount ?? 0})`) },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeNav === item.id;
@@ -953,7 +1150,15 @@ function AppDashboard({ user, logout }) {
           <div className="topbar-title-wrap">
             <h2>
               <span>VanDrishti</span>
-              <span className="prototype-tag">250m × 250m (6.25 ha)</span>
+              <span className="prototype-tag">
+                {isUploadMode ? (
+                  uploadedAssessment?.raster_info?.shape
+                    ? `${uploadedAssessment.raster_info.shape[1]}×${uploadedAssessment.raster_info.shape[0]} px (${typeof uploadedAssessment.raster_info.area_ha === 'number' ? uploadedAssessment.raster_info.area_ha + ' ha' : uploadedAssessment.raster_info.area_ha})`
+                    : 'Uploaded Area'
+                ) : (
+                  '250m × 250m (6.25 ha)'
+                )}
+              </span>
             </h2>
           </div>
 
@@ -990,17 +1195,17 @@ function AppDashboard({ user, logout }) {
 
             <div className="report-download-group">
               <button
-                onClick={() => window.open('/api/report/OSBS_large_2019?format=pdf', '_blank')}
+                onClick={() => triggerDownload(`/api/diversion/export/pdf?site=${encodeURIComponent(currentSite)}`)}
                 className="report-download-btn pdf"
-                title="Download Full OSBS Area Intelligence Report (PDF)"
+                title="Download Site Intelligence Report (PDF)"
               >
                 <FileText size={12} style={{ color: 'var(--vd-deep)' }} />
                 <span>Report PDF</span>
               </button>
               <button
-                onClick={() => window.open('/api/report/OSBS_large_2019?format=csv', '_blank')}
+                onClick={() => triggerDownload(`/api/diversion/export/csv?site=${encodeURIComponent(currentSite)}`)}
                 className="report-download-btn csv"
-                title="Download OSBS Area Intelligence Data (CSV)"
+                title="Download Site Tree Inventory Data (CSV)"
               >
                 <Download size={12} style={{ color: 'var(--vd-deep)' }} />
                 <span>CSV</span>
@@ -1016,32 +1221,125 @@ function AppDashboard({ user, logout }) {
 
         {/* TOP STAT CARDS (REAL COMPUTED DATA ONLY) */}
         <div className="stats-grid">
-          {/* Card 1 */}
-          <div className="stat-card">
-            <div>
-              <div className="stat-label">LiDAR Validated Trees</div>
-              <div className="stat-value">
-                {stats.totalTrees} <span className="stat-unit">canopies</span>
+          {/* Card 1: Tree Inventory Transparency & Pipeline Funnel */}
+          {isUploadMode ? (
+            <div className="stat-card">
+              <div>
+                <div className="stat-label">Detected Tree Canopies</div>
+                <div className="stat-value">
+                  {detectionStatus.stats.count.toLocaleString()} <span className="stat-unit">canopies</span>
+                </div>
+                <div className="stat-sub">
+                  <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>
+                    {detectionStatus.stats.method}
+                  </span>
+                  {' • '}
+                  {typeof detectionStatus.stats.res_m === 'number'
+                    ? `${detectionStatus.stats.res_m} m/px`
+                    : detectionStatus.stats.res_m || 'Raster'}
+                </div>
               </div>
-              <div className="stat-sub">
-                <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>{stats.insideTrees} in Corridor</span> • {stats.outsideTrees} Outside
+              <div className="stat-icon-wrap green">
+                <Trees size={18} />
               </div>
             </div>
-            <div className="stat-icon-wrap green">
-              <Trees size={18} />
+          ) : (
+            <div className="stat-card" style={{ flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+                <div>
+                  <div className="stat-label">Tree Inventory & Audit Funnel</div>
+                  <div className="stat-value" style={{ fontSize: '20px', display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                    <span>{stats.operationalInventory.toLocaleString()}</span>
+                    <span className="stat-unit" style={{ fontSize: '11px', color: '#94a3b8' }}>Operational Inventory</span>
+                  </div>
+                  <div className="stat-sub">
+                    <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>{stats.insideTrees} in Corridor</span> • {stats.outsideTrees} Outside
+                  </div>
+                </div>
+                <div className="stat-icon-wrap green">
+                  <Trees size={18} />
+                </div>
+              </div>
+
+              {/* Inventory Population Breakdown Table */}
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.65)',
+                border: '1px solid #143624',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                fontSize: '11px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '3px',
+                width: '100%'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
+                  <span>Raw DeepForest Detections</span>
+                  <span style={{ fontWeight: 600, color: '#e2e8f0' }}>{stats.rawTrees.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8' }}>
+                  <span>LiDAR-Validated Trees</span>
+                  <span style={{ fontWeight: 600, color: '#38bdf8' }}>{stats.validatedTrees.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6ee7b7', fontWeight: 600 }}>
+                  <span>Operational Inventory</span>
+                  <span>{stats.operationalInventory.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#ef4444' }}>
+                  <span>↳ High Priority</span>
+                  <span style={{ fontWeight: 700 }}>{stats.highPriority}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#f59e0b' }}>
+                  <span>↳ Medium Priority</span>
+                  <span style={{ fontWeight: 600 }}>{stats.mediumPriority}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', fontSize: '10.5px', color: '#22c55e' }}>
+                  <span>↳ Low Priority</span>
+                  <span style={{ fontWeight: 600 }}>{stats.lowPriority}</span>
+                </div>
+              </div>
+
+              {/* Compact Funnel Explanation */}
+              <div style={{ fontSize: '9.5px', color: '#64748b', fontStyle: 'italic', textAlign: 'center', width: '100%' }}>
+                {stats.rawTrees.toLocaleString()} raw detections → {stats.validatedTrees.toLocaleString()} LiDAR validated → {stats.operationalInventory.toLocaleString()} confidence-filtered for operational assessment
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Card 2 */}
           <div className="stat-card">
             <div>
               <div className="stat-label">Forest Health Score</div>
-              <div className="stat-value">
-                {stats.totalHealthCells} <span className="stat-unit">cells (25m)</span>
-              </div>
-              <div className="stat-sub">
-                Grades: <span style={{ color: '#16a34a', fontWeight: 700 }}>A:{stats.gradeA}</span> • <span style={{ color: '#65a30d', fontWeight: 700 }}>B:{stats.gradeB}</span> • <span style={{ color: '#ea580c', fontWeight: 700 }}>C:{stats.gradeC}</span> • <span style={{ color: '#dc2626', fontWeight: 700 }}>D:{stats.gradeD}</span>
-              </div>
+              {isUploadMode ? (
+                healthStatus.isAvailable ? (
+                  <>
+                    <div className="stat-value">
+                      {healthStatus.stats.cellCount} <span className="stat-unit">cells ({healthStatus.stats.cellSize} m)</span>
+                    </div>
+                    <div className="stat-sub">
+                      Grades: <span style={{ color: '#16a34a', fontWeight: 700 }}>A:{healthStatus.stats.gradeA}</span> • <span style={{ color: '#65a30d', fontWeight: 700 }}>B:{healthStatus.stats.gradeB}</span> • <span style={{ color: '#ea580c', fontWeight: 700 }}>C:{healthStatus.stats.gradeC}</span> • <span style={{ color: '#dc2626', fontWeight: 700 }}>D:{healthStatus.stats.gradeD}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
+                      <span className="badge-pill blocked">[BLOCKED]</span>
+                    </div>
+                    <div className="stat-sub">
+                      {healthStatus.reason || 'No multi-temporal CHM available'}
+                    </div>
+                  </>
+                )
+              ) : (
+                <>
+                  <div className="stat-value">
+                    {stats.totalHealthCells} <span className="stat-unit">cells ({stats.healthCellSize || 25} m)</span>
+                  </div>
+                  <div className="stat-sub">
+                    Grades: <span style={{ color: '#16a34a', fontWeight: 700 }}>A:{stats.gradeA}</span> • <span style={{ color: '#65a30d', fontWeight: 700 }}>B:{stats.gradeB}</span> • <span style={{ color: '#ea580c', fontWeight: 700 }}>C:{stats.gradeC}</span> • <span style={{ color: '#dc2626', fontWeight: 700 }}>D:{stats.gradeD}</span>
+                  </div>
+                </>
+              )}
             </div>
             <div className="stat-icon-wrap green">
               <Activity size={18} />
@@ -1052,12 +1350,43 @@ function AppDashboard({ user, logout }) {
           <div className="stat-card">
             <div>
               <div className="stat-label">Terrain TSP Route</div>
-              <div className="stat-value">
-                {stats.terrainDist} <span className="stat-unit">m ({stats.terrainTime} min)</span>
-              </div>
-              <div className="stat-sub">
-                <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>-{stats.terrainSaved} min</span> vs NN • {stats.highPriority} Stops
-              </div>
+              {isUploadMode ? (
+                routingStatus.isAvailable ? (
+                  <>
+                    <div className="stat-value" style={{ fontSize: '13px', margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span className={`badge-pill ${routingStatus.badgeClass}`}>
+                        {routingStatus.badgeLabel}
+                      </span>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--vd-deep)' }}>
+                        {routingStatus.modeLabel.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="stat-sub">
+                      {activeCostSurface?.active_terms
+                        ? `Terms: ${activeCostSurface.active_terms.join(' · ')} (${activeCostSurface.res_m || 'auto'}m)`
+                        : (routingStatus.stats.hasDtm ? 'DTM slope + CHM impedance active' : 'CHM canopy impedance active')}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
+                      <span className="badge-pill blocked">[BLOCKED]</span>
+                    </div>
+                    <div className="stat-sub">
+                      {routingStatus.reason || 'No DTM/CHM elevation raster'}
+                    </div>
+                  </>
+                )
+              ) : (
+                <>
+                  <div className="stat-value">
+                    {stats.terrainDist} <span className="stat-unit">m ({stats.terrainTime} min)</span>
+                  </div>
+                  <div className="stat-sub">
+                    <span style={{ color: 'var(--vd-deep)', fontWeight: 700 }}>-{stats.terrainSaved} min</span> vs NN • {stats.highPriority} Stops
+                  </div>
+                </>
+              )}
             </div>
             <div className="stat-icon-wrap cyan">
               <Navigation size={18} />
@@ -1088,12 +1417,36 @@ function AppDashboard({ user, logout }) {
           <div className="stat-card" style={{ background: 'linear-gradient(135deg, #ffffff 0%, #fefef2 100%)', borderColor: '#e9e4a8' }}>
             <div>
               <div className="stat-label">Canopy Degradation</div>
-              <div className="stat-value" style={{ color: '#856a14' }}>
-                {stats.totalDegPolygons} <span className="stat-unit">zones</span>
-              </div>
-              <div className="stat-sub">
-                <span style={{ color: '#dc2626', fontWeight: 600 }}>{stats.removalCount} Removal</span> • {stats.thinningCount} Thinning
-              </div>
+              {isUploadMode ? (
+                degradationStatus.isAvailable ? (
+                  <>
+                    <div className="stat-value" style={{ color: '#856a14' }}>
+                      {degradationStatus.stats.polygonCount} <span className="stat-unit">zones</span>
+                    </div>
+                    <div className="stat-sub">
+                      <span style={{ color: '#dc2626', fontWeight: 600 }}>{degradationStatus.stats.removalCount} Removal</span> • {degradationStatus.stats.thinningCount} Thinning
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="stat-value" style={{ fontSize: '14px', margin: '4px 0' }}>
+                      <span className="badge-pill blocked">[BLOCKED]</span>
+                    </div>
+                    <div className="stat-sub">
+                      {degradationStatus.reason || 'Needs two temporal acquisitions'}
+                    </div>
+                  </>
+                )
+              ) : (
+                <>
+                  <div className="stat-value" style={{ color: '#856a14' }}>
+                    {stats.totalDegPolygons} <span className="stat-unit">zones</span>
+                  </div>
+                  <div className="stat-sub">
+                    <span style={{ color: '#dc2626', fontWeight: 600 }}>{stats.removalCount} Removal</span> • {stats.thinningCount} Thinning
+                  </div>
+                </>
+              )}
             </div>
             <div className="stat-icon-wrap amber">
               <Scissors size={18} />
@@ -1103,8 +1456,9 @@ function AppDashboard({ user, logout }) {
 
         {/* WORKSPACE BODY (MAP + RIGHT PANEL OR SPECIAL VIEWS) */}
         <div className="workspace-body">
-          {/* SPECIAL VIEW 1: ANALYZE YOUR FOREST (UPLOAD & CAPABILITY EVALUATOR) */}
-          {activeNav === 'Analyze Your Forest' ? (
+          {activeNav === 'Diversion Assessment' ? (
+            <DiversionAssessmentView currentSite={currentSite} />
+          ) : activeNav === 'Analyze Your Forest' ? (
             <div className="analyzer-container">
               {/* Left Panel: Upload & Capability Report */}
               <div className="analyzer-sidebar">
@@ -1256,22 +1610,26 @@ function AppDashboard({ user, logout }) {
                       <span style={{ fontSize: '10px', color: 'var(--vd-text-muted)' }}>config_loader.assess()</span>
                     </div>
 
-                    {uploadedAssessment.checklist.map((item, idx) => (
-                      <div key={idx} className="checklist-row">
-                        <div className="checklist-header">
-                          <span className="checklist-mod-name">{item.module}</span>
-                          <span className={`badge-pill ${item.level.toLowerCase()}`}>
-                            [{item.level}]
-                          </span>
-                        </div>
-                        <div className="checklist-msg">{item.message}</div>
-                        {item.details?.length > 0 && (
-                          <div style={{ fontSize: '9.5px', color: '#b45309', marginTop: '2px' }}>
-                            {item.details.join(' • ')}
+                    {uploadedAssessment.checklist.map((item, idx) => {
+                      const modStatus = deriveModuleStatus(item.key, moduleContext);
+                      const displayMsg = !modStatus.isAvailable ? (modStatus.reason || item.message) : item.message;
+                      return (
+                        <div key={idx} className="checklist-row">
+                          <div className="checklist-header">
+                            <span className="checklist-mod-name">{item.module}</span>
+                            <span className={`badge-pill ${modStatus.badgeClass}`}>
+                              {modStatus.badgeLabel}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          <div className="checklist-msg">{displayMsg}</div>
+                          {item.details?.length > 0 && (
+                            <div style={{ fontSize: '9.5px', color: '#b45309', marginTop: '2px' }}>
+                              {item.details.join(' • ')}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -1490,49 +1848,57 @@ function AppDashboard({ user, logout }) {
                     />
                   )}
 
+                  {/* 1. Forest Health Grid on Upload Map (Z-Index 450) */}
+                  {layers.healthGrid && renderSharedHealthGrid(uploadedHealthGridData, 'uploadHealthGridPane', `upload-${selectedUploadPreset}`)}
+
+                  {/* 2. Canopy Degradation Polygons on Upload Map (Z-Index 460) */}
+                  {layers.degradation && renderSharedDegradation(uploadedDegradationData, 'uploadDegradationPane', `upload-${selectedUploadPreset}`)}
+
                   {/* Fit map viewport to uploaded raster bounds */}
                   {uploadedAssessment?.preview_bounds_wgs84 && (
                     <MapBoundsFitter bounds={uploadedAssessment.preview_bounds_wgs84} />
                   )}
 
-                  {/* Render Detected Crowns */}
-                  {uploadedAssessment?.detection_results?.geojson && (
-                    <GeoJSON
-                      key={`upload-trees-${selectedUploadPreset}-${uploadedAssessment?.detection_results?.method}`}
-                      data={uploadedAssessment.detection_results.geojson}
-                      pointToLayer={(feature, latlng) => {
-                        const isDf = uploadedAssessment?.detection_results?.method === 'deepforest' || feature.properties?.score !== undefined;
-                        return L.circleMarker(latlng, {
-                          radius: isDf ? 5.0 : 4.5,
-                          fillColor: isDf ? '#468585' : '#80BCBD',
-                          color: '#ffffff',
-                          weight: 1.2,
-                          fillOpacity: 0.9,
-                        });
-                      }}
-                      onEachFeature={(feature, layer) => {
-                        const p = feature.properties || {};
-                        const method = uploadedAssessment?.detection_results?.method;
-                        const isDeepForest = method === 'deepforest' || p.score !== undefined;
-                        const val = p.score !== undefined ? p.score : (p.exg_strength !== undefined ? p.exg_strength : p.confidence);
-                        const label = isDeepForest ? 'AI Score (RetinaNet)' : (p.exg_strength !== undefined ? 'ExG Strength' : 'Confidence');
-                        layer.bindPopup(`
-                          <div style="font-size:12px; color: #1f4747;">
-                            <b style="color:#468585;">Detected Tree Crown #${p.tree_id}</b><br/>
-                            <b>${label}:</b> ${val !== undefined ? (val * 100).toFixed(1) + '%' : 'N/A'}<br/>
-                            ${p.crown_diam_m !== undefined ? `<b>Crown Diameter:</b> ${p.crown_diam_m} m<br/>` : ''}
-                            <b>Pixel Coordinates:</b> [${p.pixel_x}, ${p.pixel_y}]<br/>
-                            <span style="font-size:10px; color:#6b9494;">${isDeepForest ? 'DeepForest (NEON-pretrained RetinaNet)' : 'Single-Raster Optical Crown Preview'}</span>
-                          </div>
-                        `);
-                        layer.on('click', (e) => {
-                          if (p2pEnabled) {
-                            layer.closePopup();
-                            handleMapPointClick(e.latlng);
-                          }
-                        });
-                      }}
-                    />
+                  {/* 3. Render Detected Crowns (Z-Index 500) */}
+                  {layers.trees && uploadedAssessment?.detection_results?.geojson && (
+                    <Pane name="uploadCrownsPane" style={{ zIndex: 500 }}>
+                      <GeoJSON
+                        key={`upload-trees-${selectedUploadPreset}-${uploadedAssessment?.detection_results?.method}`}
+                        data={uploadedAssessment.detection_results.geojson}
+                        pointToLayer={(feature, latlng) => {
+                          const isDf = uploadedAssessment?.detection_results?.method === 'deepforest' || feature.properties?.score !== undefined;
+                          return L.circleMarker(latlng, {
+                            radius: isDf ? 5.0 : 4.5,
+                            fillColor: isDf ? '#468585' : '#80BCBD',
+                            color: '#ffffff',
+                            weight: 1.2,
+                            fillOpacity: 0.9,
+                          });
+                        }}
+                        onEachFeature={(feature, layer) => {
+                          const p = feature.properties || {};
+                          const method = uploadedAssessment?.detection_results?.method;
+                          const isDeepForest = method === 'deepforest' || p.score !== undefined;
+                          const val = p.score !== undefined ? p.score : (p.exg_strength !== undefined ? p.exg_strength : p.confidence);
+                          const label = isDeepForest ? 'AI Score (RetinaNet)' : (p.exg_strength !== undefined ? 'ExG Strength' : 'Confidence');
+                          layer.bindPopup(`
+                            <div style="font-size:12px; color: #1f4747;">
+                              <b style="color:#468585;">Detected Tree Crown #${p.tree_id}</b><br/>
+                              <b>${label}:</b> ${val !== undefined ? (val * 100).toFixed(1) + '%' : 'N/A'}<br/>
+                              ${p.crown_diam_m !== undefined ? `<b>Crown Diameter:</b> ${p.crown_diam_m} m<br/>` : ''}
+                              <b>Pixel Coordinates:</b> [${p.pixel_x}, ${p.pixel_y}]<br/>
+                              <span style="font-size:10px; color:#6b9494;">${isDeepForest ? 'DeepForest (NEON-pretrained RetinaNet)' : 'Single-Raster Optical Crown Preview'}</span>
+                            </div>
+                          `);
+                          layer.on('click', (e) => {
+                            if (p2pEnabled) {
+                              layer.closePopup();
+                              handleMapPointClick(e.latlng);
+                            }
+                          });
+                        }}
+                      />
+                    </Pane>
                   )}
 
                   {/* P2P Dijkstra Start Marker (A) */}
@@ -1561,26 +1927,111 @@ function AppDashboard({ user, logout }) {
 
                   {/* P2P Dijkstra Result Polyline */}
                   {p2pRouteResult?.pathCoordinates && (
-                    <Polyline
-                      positions={p2pRouteResult.pathCoordinates}
-                      pathOptions={{
-                        color: '#f59e0b',
-                        weight: 5.5,
-                        opacity: 0.95,
-                        dashArray: '3, 6',
-                      }}
-                    >
-                      <Popup>
-                        <div style={{ fontSize: '12px' }}>
-                          <b style={{ color: '#f59e0b', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
-                          <b>Model:</b> {p2pRouteResult.mode_label}<br />
-                          <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
-                          <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
-                        </div>
-                      </Popup>
-                    </Polyline>
+                    <Pane name="p2pRouteUploadPane" style={{ zIndex: 650 }}>
+                      <Polyline
+                        positions={p2pRouteResult.pathCoordinates}
+                        pathOptions={{
+                          color: '#f59e0b',
+                          weight: 5.5,
+                          opacity: 0.95,
+                          dashArray: '3, 6',
+                        }}
+                      >
+                        <Popup>
+                          <div style={{ fontSize: '12px' }}>
+                            <b style={{ color: '#f59e0b', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
+                            <b>Model:</b> {p2pRouteResult.mode_label}<br />
+                            <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
+                            <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                          </div>
+                        </Popup>
+                      </Polyline>
+                    </Pane>
                   )}
                 </MapContainer>
+
+                {/* FLOATING LAYER TOGGLES & DYNAMIC LEGEND (UPLOAD MODE) */}
+                {layersOpen ? (
+                  <div className="layer-panel">
+                    <div className="layer-panel-header">
+                      <div className="layer-panel-title">
+                        <Layers size={14} style={{ color: 'var(--vd-deep)' }} />
+                        <span>Map Layers</span>
+                      </div>
+                      <button
+                        onClick={() => setLayersOpen(false)}
+                        className="layer-collapse-btn"
+                        title="Collapse Layer Panel"
+                      >
+                        <ChevronUp size={14} />
+                      </button>
+                    </div>
+
+                    <div>
+                      {[
+                        {
+                          id: 'healthGrid',
+                          label: healthStatus.isAvailable
+                            ? `Forest Health Grid (${healthStatus.stats.cellCount} · ${healthStatus.stats.cellSize} m)`
+                            : `Forest Health Grid (Unavailable: ${healthStatus.reason || 'Needs multi-temporal CHMs'})`,
+                          color: '#16a34a',
+                          disabled: !healthStatus.isAvailable,
+                        },
+                        {
+                          id: 'degradation',
+                          label: degradationStatus.isAvailable
+                            ? `Degradation Zones (${degradationStatus.stats.polygonCount})`
+                            : `Degradation Zones (Unavailable: ${degradationStatus.reason || 'Needs multi-temporal CHMs'})`,
+                          color: '#991b1b',
+                          disabled: !degradationStatus.isAvailable,
+                        },
+                        {
+                          id: 'trees',
+                          label: `Detected Crowns (${detectionStatus.stats.count})`,
+                          color: detectionStatus.stats.method === 'DeepForest RetinaNet' ? '#468585' : '#80BCBD',
+                          disabled: !uploadedAssessment?.detection_results?.geojson,
+                        },
+                      ].map((item) => (
+                        <label key={item.id} className={`layer-item ${item.disabled ? 'disabled' : ''}`} style={item.disabled ? { opacity: 0.7 } : {}}>
+                          <div className="layer-left">
+                            <input
+                              type="checkbox"
+                              checked={layers[item.id] && !item.disabled}
+                              disabled={item.disabled}
+                              onChange={() => toggleLayer(item.id)}
+                              style={{ cursor: item.disabled ? 'not-allowed' : 'pointer' }}
+                            />
+                            <span style={{ fontSize: '11px', color: item.disabled ? 'var(--vd-text-muted)' : 'inherit' }}>{item.label}</span>
+                          </div>
+                          <span className="layer-dot" style={{ backgroundColor: item.color }}></span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {/* Dynamic Forest Health Legend */}
+                    {layers.healthGrid && healthStatus.isAvailable && (
+                      <div className="legend-box" style={{ marginTop: '8px', borderTop: '1px solid var(--vd-border-subtle)', paddingTop: '6px' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--vd-deep)' }}>Forest Health Grades ({healthStatus.stats.cellSize} m):</div>
+                        <div className="legend-swatches">
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#22c55e' }}></span> A ({healthStatus.stats.gradeA})</span>
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#84cc16' }}></span> B ({healthStatus.stats.gradeB})</span>
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#f97316' }}></span> C ({healthStatus.stats.gradeC})</span>
+                          <span className="swatch-item"><span className="layer-dot" style={{ background: '#ef4444' }}></span> D ({healthStatus.stats.gradeD})</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setLayersOpen(true)}
+                    className="layer-panel-collapsed-btn"
+                    title="Expand Map Layers Control"
+                  >
+                    <Layers size={14} style={{ color: 'var(--vd-deep)' }} />
+                    <span>Layers</span>
+                    <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />
+                  </button>
+                )}
               </div>
             </div>
           ) : activeNav === 'Canopy Mask' ? (
@@ -1780,70 +2231,10 @@ function AppDashboard({ user, logout }) {
                 )}
 
                 {/* 1. FOREST HEALTH GRID (CHOROPLETH BY GRADE) */}
-                {layers.healthGrid && healthGridData && (
-                  <GeoJSON
-                    key="health-grid-layer"
-                    data={healthGridData}
-                    style={(feature) => {
-                      const grade = feature.properties?.grade;
-                      const fillColor = getHealthGradeColor(grade);
-                      return {
-                        fillColor: fillColor,
-                        fillOpacity: 0.50,
-                        color: '#ffffff',
-                        weight: 1.0,
-                        opacity: 0.8,
-                      };
-                    }}
-                    onEachFeature={(feature, layer) => {
-                      const p = feature.properties || {};
-                      layer.bindPopup(`
-                        <div style="font-size:12px; min-width:180px;">
-                          <b style="font-size:13px; color:${getHealthGradeColor(p.grade)};">Cell ${p.cell_id} — Grade ${p.grade}</b><br/>
-                          <b>Health Score:</b> <span style="font-weight:bold; color:#f1f5f9;">${p.score !== null && p.score !== undefined ? Number(p.score).toFixed(1) : 'N/A'} / 100</span><br/>
-                          <b>Canopy Cover:</b> ${p.canopy_cover !== undefined ? (p.canopy_cover * 100).toFixed(1) + '%' : 'N/A'}<br/>
-                          <b>Structural Diversity (σ):</b> ${p.structural_diversity !== undefined ? p.structural_diversity + ' m' : 'N/A'}<br/>
-                          <b>Loss Density:</b> ${p.loss_density !== undefined ? (p.loss_density * 100).toFixed(2) + '%' : 'N/A'}<br/>
-                          <span style="font-size:10px; color:#94a3b8;">Resolution: 25m × 25m LiDAR micro-grid</span>
-                        </div>
-                      `);
-                      layer.on('click', () => setSelectedFeature({ type: 'health_cell', properties: p }));
-                    }}
-                  />
-                )}
+                {layers.healthGrid && renderSharedHealthGrid(healthGridData, 'demoHealthGridPane', 'demo')}
 
                 {/* 2. CANOPY DEGRADATION POLYGONS */}
-                {layers.degradation && degradationData && (
-                  <GeoJSON
-                    key="degradation-polygons-layer"
-                    data={degradationData}
-                    style={(feature) => {
-                      const className = feature.properties?.class_name;
-                      const isRemoval = className === 'removal' || feature.properties?.class_id === 1;
-                      return {
-                        fillColor: isRemoval ? '#991b1b' : '#f97316',
-                        fillOpacity: 0.65,
-                        color: isRemoval ? '#ef4444' : '#fdba74',
-                        weight: 1.5,
-                        opacity: 0.95,
-                      };
-                    }}
-                    onEachFeature={(feature, layer) => {
-                      const p = feature.properties || {};
-                      layer.bindPopup(`
-                        <div style="font-size:12px;">
-                          <b style="color:${p.class_name === 'removal' ? '#ef4444' : '#fb923c'}; font-size:13px;">
-                            Canopy ${p.class_name ? p.class_name.toUpperCase() : 'DEGRADATION'}
-                          </b><br/>
-                          <b>Impact Area:</b> ${p.area_m2} m²<br/>
-                          <b>Classification:</b> ${p.class_name === 'removal' ? 'Severe Canopy Loss (ΔH ≤ -5m)' : 'Canopy Thinning (-5m < ΔH ≤ -2m)'}<br/>
-                          <span style="font-size:10px; color:#94a3b8;">Multi-Temporal LiDAR Differencing</span>
-                        </div>
-                      `);
-                      layer.on('click', () => setSelectedFeature({ type: 'degradation', properties: p }));
-                    }}
-                  />
-                )}
+                {layers.degradation && renderSharedDegradation(degradationData, 'demoDegradationPane', 'demo')}
 
                 {/* 3. PROJECT BOUNDARY LAYER */}
                 {layers.boundary && boundaryData && (
@@ -2095,25 +2486,28 @@ function AppDashboard({ user, logout }) {
                   </Marker>
                 )}
 
+                {/* P2P Dijkstra Result Polyline */}
                 {p2pRouteResult?.pathCoordinates && (
-                  <Polyline
-                    positions={p2pRouteResult.pathCoordinates}
-                    pathOptions={{
-                      color: '#d97706',
-                      weight: 5.5,
-                      opacity: 0.95,
-                      dashArray: '3, 6',
-                    }}
-                  >
-                    <Popup>
-                      <div style={{ fontSize: '12px' }}>
-                        <b style={{ color: '#d97706', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
-                        <b>Model:</b> {p2pRouteResult.mode_label}<br />
-                        <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
-                        <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
-                      </div>
-                    </Popup>
-                  </Polyline>
+                  <Pane name="p2pRouteOverviewPane" style={{ zIndex: 650 }}>
+                    <Polyline
+                      positions={p2pRouteResult.pathCoordinates}
+                      pathOptions={{
+                        color: '#d97706',
+                        weight: 5.5,
+                        opacity: 0.95,
+                        dashArray: '3, 6',
+                      }}
+                    >
+                      <Popup>
+                        <div style={{ fontSize: '12px' }}>
+                          <b style={{ color: '#d97706', fontSize: '13px' }}>Point-to-Point Dijkstra Path</b><br />
+                          <b>Model:</b> {p2pRouteResult.mode_label}<br />
+                          <b>Distance:</b> {p2pRouteResult.distance_meters !== 'UNAVAILABLE' ? `${p2pRouteResult.distance_meters} m` : 'UNAVAILABLE'}<br />
+                          <b>Est. Time:</b> {p2pRouteResult.travel_time_minutes !== 'UNAVAILABLE' ? `${p2pRouteResult.travel_time_minutes} min` : 'UNAVAILABLE'}
+                        </div>
+                      </Popup>
+                    </Polyline>
+                  </Pane>
                 )}
               </MapContainer>
 
@@ -2150,7 +2544,7 @@ function AppDashboard({ user, logout }) {
                       { id: 'priority', label: `Priority Trees (${stats.insideTrees + stats.outsideTrees})`, color: '#d97706' },
                       { id: 'degradation', label: `Degradation Zones (${stats.totalDegPolygons})`, color: '#991b1b' },
                       { id: 'legacyRoute', label: `Route (ExG, legacy, ${stats.legacyDist}m)`, color: '#c084fc' },
-                      { id: 'fires', label: `NASA FIRMS Fires (${stats.fireCount})`, color: '#ea580c' },
+                      { id: 'fires', label: stats.fireStatus === 'UNAVAILABLE' ? 'NASA FIRMS Fires (Unavailable)' : `NASA FIRMS Fires (${stats.fireCount ?? 0})`, color: '#ea580c' },
                     ].map((item) => (
                       <label key={item.id} className="layer-item">
                         <div className="layer-left">
@@ -2170,7 +2564,7 @@ function AppDashboard({ user, logout }) {
                   {/* Dynamic Forest Health Legend */}
                   {layers.healthGrid && (
                     <div className="legend-box" style={{ marginTop: '8px', borderTop: '1px solid var(--vd-border-subtle)', paddingTop: '6px' }}>
-                      <div style={{ fontWeight: 700, color: 'var(--vd-deep)' }}>Forest Health Grades (25m):</div>
+                      <div style={{ fontWeight: 700, color: 'var(--vd-deep)' }}>Forest Health Grades ({stats.healthCellSize || 25} m):</div>
                       <div className="legend-swatches">
                         <span className="swatch-item"><span className="layer-dot" style={{ background: '#16a34a' }}></span> A ({stats.gradeA})</span>
                         <span className="swatch-item"><span className="layer-dot" style={{ background: '#65a30d' }}></span> B ({stats.gradeB})</span>
@@ -2266,35 +2660,88 @@ function AppDashboard({ user, logout }) {
 
                 {alertsExpanded && (
                   <div className="collapsible-section-content">
-                    <div className="alert-card priority">
-                      <div className="alert-title">
-                        <AlertTriangle size={13} />
-                        <span>{stats.highPriority} Mandatory Ground Stops</span>
-                      </div>
-                      <div className="alert-text">
-                        All {stats.highPriority} HIGH-priority trees fall within the project corridor and require ground truth verification.
-                      </div>
-                    </div>
+                    {isUploadMode ? (
+                      <>
+                        <div className="alert-card priority">
+                          <div className="alert-title" style={{ justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <AlertTriangle size={13} />
+                              <span>{priorityStatus.alertTitle}</span>
+                            </div>
+                            <span className={`badge-pill ${priorityStatus.badgeClass}`}>
+                              {priorityStatus.badgeLabel}
+                            </span>
+                          </div>
+                          <div className="alert-text">
+                            {priorityStatus.message}
+                          </div>
+                        </div>
 
-                    <div className="alert-card route">
-                      <div className="alert-title">
-                        <Navigation size={13} />
-                        <span>Terrain TSP: {stats.terrainDist}m ({stats.terrainTime} min)</span>
-                      </div>
-                      <div className="alert-text">
-                        Held-Karp terrain TSP saved {stats.terrainSaved} min traversal time vs nearest-neighbor.
-                      </div>
-                    </div>
+                        <div className="alert-card route">
+                          <div className="alert-title" style={{ justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <Navigation size={13} />
+                              <span>{routingStatus.alertTitle}</span>
+                            </div>
+                            <span className={`badge-pill ${routingStatus.badgeClass}`}>
+                              {routingStatus.badgeLabel}
+                            </span>
+                          </div>
+                          <div className="alert-text">
+                            {routingStatus.message}
+                          </div>
+                        </div>
 
-                    <div className="alert-card fire">
-                      <div className="alert-title">
-                        <Scissors size={13} />
-                        <span>{stats.totalDegPolygons} Canopy Loss Zones</span>
-                      </div>
-                      <div className="alert-text">
-                        {stats.removalCount} severe removal (ΔH ≤ -5m) & {stats.thinningCount} thinning polygons via LiDAR differencing.
-                      </div>
-                    </div>
+                        <div className="alert-card fire">
+                          <div className="alert-title" style={{ justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <Scissors size={13} />
+                              <span>{degradationStatus.alertTitle}</span>
+                            </div>
+                            <span className={`badge-pill ${degradationStatus.badgeClass}`}>
+                              {degradationStatus.badgeLabel}
+                            </span>
+                          </div>
+                          <div className="alert-text">
+                            {degradationStatus.isAvailable
+                              ? `${degradationStatus.stats.removalCount} severe removal (ΔH ≤ -5m) & ${degradationStatus.stats.thinningCount} thinning polygons via LiDAR differencing.`
+                              : degradationStatus.reason}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="alert-card priority">
+                          <div className="alert-title">
+                            <AlertTriangle size={13} />
+                            <span>{priorityStatus.alertTitle}</span>
+                          </div>
+                          <div className="alert-text">
+                            {priorityStatus.message}
+                          </div>
+                        </div>
+
+                        <div className="alert-card route">
+                          <div className="alert-title">
+                            <Navigation size={13} />
+                            <span>{routingStatus.alertTitle}</span>
+                          </div>
+                          <div className="alert-text">
+                            {routingStatus.message}
+                          </div>
+                        </div>
+
+                        <div className="alert-card fire">
+                          <div className="alert-title">
+                            <Scissors size={13} />
+                            <span>{degradationStatus.alertTitle}</span>
+                          </div>
+                          <div className="alert-text">
+                            {degradationStatus.message}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -2385,43 +2832,45 @@ function AppDashboard({ user, logout }) {
               </div>
 
               {/* 13 HIGH PRIORITY ITINERARY TABLE */}
-              <div className="panel-section">
-                <div
-                  className="section-heading"
-                  onClick={() => setStopsExpanded(!stopsExpanded)}
-                  style={{ cursor: 'pointer', justifyContent: 'space-between' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Navigation size={14} style={{ color: 'var(--vd-deep)' }} />
-                    <span>13 Audit Stops (Sequence)</span>
-                  </div>
-                  {stopsExpanded ? <ChevronUp size={13} style={{ color: 'var(--vd-text-secondary)' }} /> : <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />}
-                </div>
-
-                {stopsExpanded && (
-                  <div className="collapsible-section-content">
-                    <div className="stops-table-card compact">
-                      {orderedStops.map((st) => (
-                        <div
-                          key={st.stopNum}
-                          className="stops-row"
-                          onClick={() => handleFocusStop(st)}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ background: 'var(--vd-aqua)', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9.5px', fontWeight: 800 }}>
-                              {st.stopNum}
-                            </span>
-                            <span style={{ fontWeight: 700, color: 'var(--vd-text-heading)' }}>Tree #{st.treeId}</span>
-                          </div>
-                          <div style={{ color: '#b45309', fontFamily: 'JetBrains Mono', fontSize: '9.5px', fontWeight: 600 }}>
-                            {(st.properties.confidence * 100).toFixed(1)}%
-                          </div>
-                        </div>
-                      ))}
+              {!isUploadMode && (
+                <div className="panel-section">
+                  <div
+                    className="section-heading"
+                    onClick={() => setStopsExpanded(!stopsExpanded)}
+                    style={{ cursor: 'pointer', justifyContent: 'space-between' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Navigation size={14} style={{ color: 'var(--vd-deep)' }} />
+                      <span>13 Audit Stops (Sequence)</span>
                     </div>
+                    {stopsExpanded ? <ChevronUp size={13} style={{ color: 'var(--vd-text-secondary)' }} /> : <ChevronDown size={13} style={{ color: 'var(--vd-text-secondary)' }} />}
                   </div>
-                )}
-              </div>
+
+                  {stopsExpanded && (
+                    <div className="collapsible-section-content">
+                      <div className="stops-table-card compact">
+                        {orderedStops.map((st) => (
+                          <div
+                            key={st.stopNum}
+                            className="stops-row"
+                            onClick={() => handleFocusStop(st)}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ background: 'var(--vd-aqua)', color: 'white', width: '18px', height: '18px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9.5px', fontWeight: 800 }}>
+                                {st.stopNum}
+                              </span>
+                              <span style={{ fontWeight: 700, color: 'var(--vd-text-heading)' }}>Tree #{st.treeId}</span>
+                            </div>
+                            <div style={{ color: '#b45309', fontFamily: 'JetBrains Mono', fontSize: '9.5px', fontWeight: 600 }}>
+                              {(st.properties.confidence * 100).toFixed(1)}%
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* DATA SOURCES */}
               <div className="panel-section">

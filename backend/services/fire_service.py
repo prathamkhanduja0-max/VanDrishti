@@ -25,13 +25,15 @@ def query_firms_hotspots(preset: str = "osbs_live", day_range: int = 5) -> Dict[
     Executes or loads NASA FIRMS fire hotspots.
     Checks environment for FIRMS_MAP_KEY and delegates to fire_detection_firms.py.
     """
+    safe_day_range = min(max(1, int(day_range)), 5)
+
     try:
         import fire_detection_firms
         
-        # Override preset parameter if needed
+        # Override preset parameter safely
         fire_detection_firms.ACTIVE_PRESET = preset
         if preset in fire_detection_firms.PRESETS:
-            fire_detection_firms.PRESETS[preset]["day_range"] = day_range
+            fire_detection_firms.PRESETS[preset]["day_range"] = safe_day_range
             
         result = fire_detection_firms.run_fire_detection(preset_key=preset)
         
@@ -57,6 +59,7 @@ def query_firms_hotspots(preset: str = "osbs_live", day_range: int = 5) -> Dict[
             conn.commit()
             
         return {
+            "status": "AVAILABLE",
             "preset": preset,
             "aoi_name": result.get("aoi_name", preset),
             "hotspot_count": result.get("hotspot_count", 0),
@@ -64,20 +67,45 @@ def query_firms_hotspots(preset: str = "osbs_live", day_range: int = 5) -> Dict[
             "geojson": geojson_data,
         }
     except Exception as e:
-        # Fallback to existing static GeoJSON in frontend/public/data
-        fallback_file = FRONTEND_DATA_DIR / f"fire_hotspots_{preset}.geojson"
+        # Fallback to existing static GeoJSON in results/gis or frontend/public/data
+        fallback_file = RESULTS_GIS_DIR / f"fire_hotspots_{preset}.geojson"
+        if not fallback_file.exists():
+            fallback_file = FRONTEND_DATA_DIR / f"fire_hotspots_{preset}.geojson"
         if not fallback_file.exists():
             fallback_file = FRONTEND_DATA_DIR / "fire_hotspots_osbs_live.geojson"
             
         if fallback_file.exists():
-            with open(fallback_file, "r", encoding="utf-8") as f:
-                fallback_data = json.load(f)
-            return {
-                "preset": preset,
-                "aoi_name": preset,
-                "hotspot_count": len(fallback_data.get("features", [])),
-                "source": "VIIRS_SNPP_NRT (Cached Fallback)",
-                "geojson": fallback_data,
-                "warning": f"Live query failed ({str(e)}), served cached data.",
-            }
-        raise RuntimeError(f"Failed to fetch fire hotspots: {e}")
+            try:
+                with open(fallback_file, "r", encoding="utf-8") as f:
+                    fallback_data = json.load(f)
+                features = fallback_data.get("features", [])
+                if len(features) > 0:
+                    fallback_data["status"] = "UNAVAILABLE"
+                    fallback_data["reason"] = f"Live query failed ({str(e)}), served cached data."
+                    return {
+                        "status": "UNAVAILABLE",
+                        "reason": f"NASA FIRMS API unreachable ({str(e)}), served cached data.",
+                        "preset": preset,
+                        "aoi_name": preset,
+                        "hotspot_count": len(features),
+                        "source": "VIIRS_SNPP_NRT (Cached Fallback)",
+                        "geojson": fallback_data,
+                        "warning": f"Live query failed ({str(e)}), served cached data.",
+                    }
+            except Exception:
+                pass
+
+        return {
+            "status": "UNAVAILABLE",
+            "reason": f"NASA FIRMS API unreachable: {str(e)}",
+            "preset": preset,
+            "aoi_name": preset,
+            "hotspot_count": None,
+            "source": "UNAVAILABLE",
+            "geojson": {
+                "type": "FeatureCollection",
+                "features": [],
+                "status": "UNAVAILABLE",
+                "reason": f"NASA FIRMS API unreachable: {str(e)}"
+            },
+        }
